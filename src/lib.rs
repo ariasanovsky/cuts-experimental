@@ -1,6 +1,8 @@
 use faer::{Col, Mat, MatRef};
 use rand::{prelude::SliceRandom, Rng};
 
+pub mod sct;
+
 pub struct CutDecomposition {
     mat: Mat<f64>,
     rows: Vec<Vec<bool>>,
