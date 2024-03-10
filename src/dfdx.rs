@@ -1,4 +1,4 @@
-use dfdx::{nn::Module, shapes::{Dtype, Rank0, Rank1, Rank2}, tensor::{HasErr, SplitTape, Tape, Tensor}, tensor_ops::{BroadcastTo, ChooseFrom, Device, PermuteTo, TryMatMul}};
+use dfdx::{nn::Module, shapes::{Const, Dim, Dtype, HasShape, Rank0, Rank1, Rank2}, tensor::{HasErr, SplitTape, Storage, Tape, Tensor}, tensor_ops::{BroadcastTo, ChooseFrom, Device, PermuteTo, TryAdd, TryMatMul}};
 
 pub struct SctLinear<const I: usize, const K: usize, const O: usize, E: Dtype, D: Device<E>> {
     pub s: Tensor<Rank2<O, K>, bool, D>,
@@ -15,6 +15,11 @@ where
     T::Tape: Tape<E, D>,
     T::Output: TryMatMul<Tensor<Rank1<K>, E, D, T::Tape>, Err = D::Err, Output = T::Output>,
     T::Output: TryMatMul<Tensor<Rank2<K, O>, E, D, T::Tape>, Err = D::Err>,
+    for<'a> Bias1D<'a, O, E, D>: Module<
+        <T::Output as TryMatMul<Tensor<Rank2<K, O>, E, D, T::Tape>>>::Output,
+        Output = <T::Output as TryMatMul<Tensor<Rank2<K, O>, E, D, T::Tape>>>::Output,
+        Error = D::Err,
+    >,
 {
     type Output = <T::Output as TryMatMul<Tensor<Rank2<K, O>, E, D, T::Tape>>>::Output;
 
@@ -39,7 +44,7 @@ where
         // `o` is `O`-dim'l
         // let shape = o.shape();
         // o.try_add(self.b.retaped::<T>().try_broadcast_like(&shape)?)
-        Ok(o)
+        Bias1D { beta: &self.b }.try_forward(o)
     }
     
     fn forward(&self, input: T) -> Self::Output {
@@ -47,18 +52,44 @@ where
     }
 }
 
-// where <
-//     T as TryMatMul<
-//         Tensor<
-//             (Const<I>, Const<K>),
-//             E,
-//             D,
-//             <
-//                 T as SplitTape
-//             >::Tape
-//         >
-//     >
-// >::Output:
-//     TryMatMul<
-//         Tensor<
-//             (Const<K>, Const<O>), E, D, <T as SplitTape>::Tape>>
+struct Bias1D<'a, const M: usize, E: Dtype, D: Storage<E>> {
+    beta: &'a Tensor<Rank1<M>, E, D>,
+}
+
+impl<'a, const M: usize, E: Dtype, D: Device<E>, T: Tape<E, D>> Module<Tensor<Rank1<M>, E, D, T>>
+    for Bias1D<'a, M, E, D>
+{
+    type Output = Tensor<Rank1<M>, E, D, T>;
+    type Error = D::Err;
+
+    fn try_forward(&self, input: Tensor<Rank1<M>, E, D, T>) -> Result<Self::Output, D::Err> {
+        input.try_add(self.beta.clone())
+    }
+}
+
+impl<'a, B: Dim, const M: usize, E: Dtype, D: Device<E>, T: Tape<E, D>>
+    Module<Tensor<(B, Const<M>), E, D, T>> for Bias1D<'a, M, E, D>
+{
+    type Output = Tensor<(B, Const<M>), E, D, T>;
+    type Error = D::Err;
+
+    fn try_forward(&self, input: Tensor<(B, Const<M>), E, D, T>) -> Result<Self::Output, D::Err> {
+        let shape = *input.shape();
+        input.try_add(self.beta.retaped::<T>().try_broadcast_like(&shape)?)
+    }
+}
+
+impl<'a, B: Dim, S: Dim, const M: usize, E: Dtype, D: Device<E>, T: Tape<E, D>>
+    Module<Tensor<(B, S, Const<M>), E, D, T>> for Bias1D<'a, M, E, D>
+{
+    type Output = Tensor<(B, S, Const<M>), E, D, T>;
+    type Error = D::Err;
+
+    fn try_forward(
+        &self,
+        input: Tensor<(B, S, Const<M>), E, D, T>,
+    ) -> Result<Self::Output, D::Err> {
+        let shape = *input.shape();
+        input.try_add(self.beta.retaped::<T>().try_broadcast_like(&shape)?)
+    }
+}
