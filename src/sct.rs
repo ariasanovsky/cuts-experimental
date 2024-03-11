@@ -3,7 +3,7 @@ use core::num;
 use faer::{Mat, MatRef};
 use rand::{prelude::SliceRandom, Rng};
 
-pub struct SctApproximation {
+pub struct SctApproximation<E> {
     // `k`
     rank: usize,
     // `m`
@@ -13,19 +13,19 @@ pub struct SctApproximation {
     // `m x k`
     s: Vec<bool>,
     // `k x k` diagonal matrix
-    c: Vec<Cut>,
+    c: Vec<Cut<E>>,
     // `n x k` transposed
     t: Vec<bool>,
 }
 
 #[derive(Clone)]
-pub struct Cut {
+pub struct Cut<E> {
     s_size: usize,
     t_size: usize,
-    cut: f64,
+    cut: E,
 }
 
-impl SctApproximation {
+impl SctApproximation<f64> {
     pub fn new(nrows: usize, ncols: usize) -> Self {
         Self {
             rank: 0,
@@ -55,7 +55,7 @@ impl SctApproximation {
 
         let mut s_opt = vec![false; self.nrows];
         let mut t_opt = vec![false; self.ncols];
-        let mut c_opt = Cut {
+        let mut c_opt: Cut<f64> = Cut {
             s_size: 0,
             t_size: 0,
             cut: 0.0,
@@ -63,7 +63,7 @@ impl SctApproximation {
         for _ in 0..trials {
             let (mut t, t_size) = Self::generate_col(self.nrows, rng);
             let mut s = vec![false; self.ncols];
-            let mut c = Cut {
+            let mut c: Cut<f64> = Cut {
                 s_size: 0,
                 t_size,
                 cut: 0.0,
@@ -112,7 +112,7 @@ impl SctApproximation {
         (col, num_ones)
     }
 
-    fn optimize_cut(&self, s_new: &mut [bool], c_new: &mut Cut, t_new: &mut [bool], mat: MatRef<f64>) -> bool {
+    fn optimize_cut(&self, s_new: &mut [bool], c_new: &mut Cut<f64>, t_new: &mut [bool], mat: MatRef<f64>) -> bool {
         let improved_s = self.optimize_s(s_new, c_new, t_new, mat);
         // return improved_s;
         if !improved_s {
@@ -121,7 +121,7 @@ impl SctApproximation {
         self.optimize_t(s_new, c_new, t_new, mat)
     }
 
-    fn optimize_s(&self, s_new: &mut [bool], c_new: &mut Cut, t_new: &[bool], mat: MatRef<f64>) -> bool {
+    fn optimize_s(&self, s_new: &mut [bool], c_new: &mut Cut<f64>, t_new: &[bool], mat: MatRef<f64>) -> bool {
         // let num_s_bools = self.s.len();
         // let num_t_bools = self.t.len();
         // assert_eq!(num_s_bools, self.rank * self.nrows);
@@ -185,7 +185,7 @@ impl SctApproximation {
         }
     }
 
-    fn optimize_t(&self, s_new: &[bool], c_new: &mut Cut, t_new: &mut [bool], mat: MatRef<f64>) -> bool {
+    fn optimize_t(&self, s_new: &[bool], c_new: &mut Cut<f64>, t_new: &mut [bool], mat: MatRef<f64>) -> bool {
         let mut prod = vec![0.0; self.ncols];
         let mut pos = vec![false; self.ncols];
         let mut neg = vec![false; self.ncols];
@@ -245,15 +245,31 @@ impl SctApproximation {
 
     pub fn remainder(&self, mat: MatRef<f64>) -> Mat<f64> {
         let mut remainder = mat.to_owned();
-        for i in 0..self.nrows {
-            for j in 0..self.ncols {
-                for m in 0..self.rank {
+        for m in 0..self.rank {
+            let k = self.c[m].cut / (self.c[m].s_size * self.c[m].t_size) as f64;
+            for i in 0..self.nrows {
+                for j in 0..self.ncols {
                     if self.s[m * self.nrows + i] && self.t[m * self.ncols + j] {
-                        remainder[(i, j)] -= self.c[m].cut / (self.c[m].s_size * self.c[m].t_size) as f64;
+                        remainder[(i, j)] -= k;
                     }
                 }
             }
         }
         remainder
+    }
+
+    pub fn approximation(&self) -> Mat<f64> {
+        let mut approx = Mat::zeros(self.nrows, self.ncols);
+        for m in 0..self.rank {
+            let k = self.c[m].cut / (self.c[m].s_size * self.c[m].t_size) as f64;
+            for i in 0..self.nrows {
+                for j in 0..self.ncols {
+                    if self.s[m * self.nrows + i] && self.t[m * self.ncols + j] {
+                        approx[(i, j)] += k;
+                    }
+                }
+            }
+        }
+        approx
     }
 }
