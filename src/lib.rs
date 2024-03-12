@@ -1,4 +1,4 @@
-use faer::{Col, Mat, MatRef};
+use faer::Mat;
 use rand::{prelude::SliceRandom, Rng};
 
 pub mod dfdx;
@@ -35,7 +35,7 @@ impl CutDecomposition {
         self.rows.push(row);
         self.cols.push(col);
         self.cuts.push(0.0);
-        for i in 0..(nrows * self.mat.ncols()) {
+        for _i in 0..(nrows * self.mat.ncols()) {
             let _ = unsafe { self.optimize_last_row() };
             // let improved = unsafe { self.optimize_last_row() };
             let improved = unsafe { self.optimize_last_col() };

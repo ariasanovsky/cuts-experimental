@@ -1,5 +1,3 @@
-use core::num;
-
 use faer::{Mat, MatRef};
 use rand::{prelude::SliceRandom, Rng};
 

@@ -1,5 +1,5 @@
 use cuts::CutDecomposition;
-use faer::{stats::{Normal, NormalMat, UnitaryMat}, Mat};
+use faer::{stats::UnitaryMat, Mat};
 use rand_distr::Distribution;
 
 fn main() {
