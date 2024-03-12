@@ -12,9 +12,9 @@ fn main() {
     println!("{mat:?}");
     let mut skt = SctApproximation::new(mat.nrows(), mat.ncols());
     for i in 0..50 {
-        skt.extend(&mut rng, mat.as_ref(), 1_000, true);
+        skt.extend(&mut rng, mat.as_ref(), 1_000, false, false);
         // println!("s = {:?}", skt.last_s());
         // println!("t = {:?}", skt.last_t());
-        println!("l2, cut{{{i}}} = {}, {:?}", skt.remainder(mat.as_ref()).squared_norm_l2(), skt.last_cut());
+        println!("l2, cut{{{i}}} = {}, {:?}", skt.remainder(mat.as_ref(), false).squared_norm_l2(), skt.last_cut());
     }
 }

@@ -3,6 +3,7 @@ use rand::{prelude::SliceRandom, Rng};
 
 pub mod dfdx;
 pub mod sct;
+pub mod inplace_sct;
 
 pub struct CutDecomposition {
     mat: Mat<f64>,
