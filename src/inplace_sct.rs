@@ -13,7 +13,9 @@ pub fn cut_mat(
     mut optimal_output: ColMut<f64>,
     mut test_input: ColMut<f64>,
     mut test_output: ColMut<f64>,
-    rng: &mut impl rand::Rng
+    rng: &mut impl rand::Rng,
+    adjustment_factor: f64,
+    trials: usize,
 ) -> Option<Cut> {
     optimal_input.fill_zero();
     optimal_output.fill_zero();
@@ -22,7 +24,7 @@ pub fn cut_mat(
         output_size: 0,
         cut_value: 0.0,
     };
-    for trial in 0..10 {
+    for trial in 0..trials {
         let mut input_size = 0;
         for i in 0..test_input.nrows() {
             if rng.gen() {
@@ -38,13 +40,15 @@ pub fn cut_mat(
             output_size: 0,
             cut_value: 0.0,
         };
-        for _ in 0..100 {
+        for _ in 0..1_000 {
             let improved_output = improve_output(
                 mat.rb(),
                 test_input.rb(),
                 test_output.rb_mut(),
                 &mut test_cut,
             );
+            // let cut_value = test_output.rb().transpose() * mat.rb() * test_input.rb();
+            // assert_eq!(test_cut.cut_value, cut_value);
             if !improved_output {
                 break
             }
@@ -54,6 +58,8 @@ pub fn cut_mat(
                 test_output.rb(),
                 &mut test_cut,
             );
+            // let cut_value = test_output.rb().transpose() * mat.rb() * test_input.rb();
+            // assert_eq!(test_cut.cut_value, cut_value);
             if !improved_input {
                 break
             }
@@ -71,7 +77,8 @@ pub fn cut_mat(
     }
     let normalized_cut = optimal_cut.cut_value / normalization as f64;
     let optimal_input = optimal_input.transpose_mut();
-    let cut_matrix = scale(normalized_cut) * optimal_output * optimal_input;
+    let cut_matrix = scale(adjustment_factor * normalized_cut) * optimal_output * optimal_input;
+
     mat -= cut_matrix;
     Some(optimal_cut)
 }
@@ -157,11 +164,11 @@ fn improve_input(
         if pos_sum < test_cut.cut_value.abs() {
             return false
         }
-        for j in 0..new_input.nrows() {
-            if new_input.read(j) <= 0.0 {
-                test_input.write(j, 0.0)
+        for i in 0..new_input.ncols() {
+            if new_input.read(i) <= 0.0 {
+                test_input.write(i, 0.0)
             } else {
-                test_input.write(j, 1.0)
+                test_input.write(i, 1.0)
             }
         }
         (pos_count, pos_sum)
@@ -169,7 +176,7 @@ fn improve_input(
         if -neg_sum < test_cut.cut_value.abs() {
             return false
         }
-        for j in 0..new_input.nrows() {
+        for j in 0..new_input.ncols() {
             if new_input.read(j) >= 0.0 {
                 test_input.write(j, 0.0)
             } else {
