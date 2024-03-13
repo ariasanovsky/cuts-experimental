@@ -1,4 +1,4 @@
-use cuts::inplace_sct::cut_mat;
+use cuts::inplace_sct_signed::cut_mat_signed;
 use faer::{Col, Mat};
 
 fn main() {
@@ -16,8 +16,8 @@ fn main() {
     let mut test_output = Col::zeros(OUTPUTS);
     let mut rng = rand::thread_rng();
     println!("{}", leftover.norm_l2());
-    for i in 0..500 {
-        let new_cut = cut_mat(
+    for i in 0..5 {
+        let new_cut = cut_mat_signed(
             leftover.as_mut(),
             optimal_input.as_mut(),
             optimal_output.as_mut(),
@@ -25,7 +25,7 @@ fn main() {
             test_output.as_mut(),
             &mut rng,
             1.0,
-            1,
+            10,
         ).unwrap();
         println!("i = {i}: {}, {}", leftover.norm_l2(), new_cut.cut_value);
         println!("{leftover:?}");
