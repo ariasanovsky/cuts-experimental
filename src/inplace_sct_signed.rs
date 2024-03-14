@@ -8,7 +8,8 @@ pub struct SignedCut {
 }
 
 pub fn cut_mat_signed(
-    mut mat: MatMut<f64>,
+    mut remainder: MatMut<f64>,
+    mut approximat: MatMut<f64>,
     mut optimal_input: ColMut<f64>,
     mut optimal_output: ColMut<f64>,
     mut test_input: ColMut<f64>,
@@ -16,6 +17,7 @@ pub fn cut_mat_signed(
     rng: &mut impl rand::Rng,
     adjustment_factor: f64,
     trials: usize,
+    max_loops: usize,
 ) -> Option<SignedCut> {
     optimal_input.fill_zero();
     optimal_output.fill_zero();
@@ -40,9 +42,9 @@ pub fn cut_mat_signed(
             pos_outputs: 0,
             cut_value: 0.0,
         };
-        for _ in 0..1_000 {
+        for _ in 0..max_loops {
             let improved_output = improve_output(
-                mat.rb(),
+                remainder.rb(),
                 test_input.rb(),
                 test_output.rb_mut(),
                 &mut test_cut,
@@ -53,25 +55,26 @@ pub fn cut_mat_signed(
                 break
             }
             let improved_input = improve_input(
-                mat.rb(),
+                remainder.rb(),
                 test_input.rb_mut(),
                 test_output.rb(),
                 &mut test_cut,
             );
             // let cut_value = test_output.rb().transpose() * mat.rb() * test_input.rb();
             // assert_eq!(test_cut.cut_value, cut_value);
+
             if !improved_input {
                 break
             }
         }
         if test_cut.cut_value.abs() > optimal_cut.cut_value.abs() {
-            dbg!(&test_cut);
+            // dbg!(&test_cut);
             optimal_cut = test_cut;
             optimal_input.copy_from(test_input.rb());
             optimal_output.copy_from(test_output.rb());
         }
     }
-    let normalization = mat.nrows() * mat.ncols();
+    let normalization = remainder.nrows() * remainder.ncols();
     if normalization == 0 {
         unreachable!();
         return None
@@ -80,7 +83,8 @@ pub fn cut_mat_signed(
     let optimal_input = optimal_input.transpose_mut();
     let cut_matrix = scale(adjustment_factor * normalized_cut) * optimal_output * optimal_input;
 
-    mat -= cut_matrix;
+    remainder -= &cut_matrix;
+    approximat += cut_matrix;
     Some(optimal_cut)
 }
 
