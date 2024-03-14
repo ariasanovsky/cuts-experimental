@@ -2,8 +2,8 @@ use faer::{reborrow::{Reborrow, ReborrowMut}, scale, ColMut, ColRef, MatMut, Mat
 
 #[derive(Debug)]
 pub struct SignedCut {
-    // pub pos_inputs: usize,
-    // pub pos_outputs: usize,
+    pub pos_inputs: usize,
+    pub pos_outputs: usize,
     pub cut_value: f64,
 }
 
@@ -20,24 +20,24 @@ pub fn cut_mat_signed(
     optimal_input.fill_zero();
     optimal_output.fill_zero();
     let mut optimal_cut = SignedCut {
-        // pos_inputs: 0,
-        // pos_outputs: 0,
+        pos_inputs: 0,
+        pos_outputs: 0,
         cut_value: 0.0,
     };
     for trial in 0..trials {
-        // let mut pos_inputs = 0;
+        let mut pos_inputs = 0;
         for i in 0..test_input.nrows() {
             if rng.gen() {
                 test_input.write(i, 1.0);
-                // pos_inputs += 1;
+                pos_inputs += 1;
             } else {
                 test_input.write(i, -1.0);
             }
         }
         test_output.fill(0.0);
         let mut test_cut = SignedCut {
-            // pos_inputs,
-            // pos_outputs: 0,
+            pos_inputs,
+            pos_outputs: 0,
             cut_value: 0.0,
         };
         for _ in 0..1_000 {
@@ -99,7 +99,7 @@ fn improve_output(
     }
     // let mut pos_sum = 0.0;
     // let mut neg_sum = 0.0;
-    // let mut pos_count = 0;
+    let mut pos_count = 0;
     // let mut neg_count = 0;
     for i in 0..new_output.nrows() {
         let out_i = new_output.read(i);
@@ -109,10 +109,11 @@ fn improve_output(
             // neg_sum += out_i;
         } else {
             test_output.write(i, 1.0);
-            // pos_count += 1;
+            pos_count += 1;
             // pos_sum += out_i;
         }
     }
+    test_cut.pos_outputs = pos_count;
     // let new_cut = new_output.norm_l1();
     // let (new_count, new_cut) = if pos_sum > -neg_sum {
     //     if pos_sum < test_cut.cut_value.abs() {
@@ -164,7 +165,7 @@ fn improve_input(
     }
     // let mut pos_sum = 0.0;
     // let mut neg_sum = 0.0;
-    // let mut pos_count = 0;
+    let mut pos_count = 0;
     // let mut neg_count = 0;
     for j in 0..new_input.ncols() {
         let in_j = new_input.read(j);
@@ -174,11 +175,12 @@ fn improve_input(
             // neg_sum += in_j;
 
         } else {
-            test_input.write(j, 1.0)
-            // pos_count += 1;
+            test_input.write(j, 1.0);
+            pos_count += 1;
             // pos_sum += in_j;
         }
     }
+    test_cut.pos_inputs = pos_count;
     // let (new_count, new_cut) = if pos_sum > -neg_sum {
     //     if pos_sum < test_cut.cut_value.abs() {
     //         return false
