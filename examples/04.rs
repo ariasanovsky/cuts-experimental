@@ -27,10 +27,9 @@ fn main() {
             test_input.as_mut(),
             test_output.as_mut(),
             &mut rng,
-            1.0,
             10,
             100,
-        ).unwrap();
+        );
         println!("i = {i}: {}, {}", remainder.norm_l2(), new_cut.cut_value);
         println!("{remainder:?}");
     }

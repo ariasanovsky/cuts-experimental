@@ -1,8 +1,11 @@
 use faer::Mat;
 use rand::{prelude::SliceRandom, Rng};
 
+#[cfg(feature = "dfdx")]
 pub mod dfdx;
+#[cfg(feature = "old_stuff_that_didnt_work")]
 pub mod sct;
+#[cfg(feature = "old_stuff_that_didnt_work")]
 pub mod inplace_sct;
 pub mod inplace_sct_signed;
 
