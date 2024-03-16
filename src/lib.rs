@@ -8,6 +8,7 @@ pub mod sct;
 #[cfg(feature = "old_stuff_that_didnt_work")]
 pub mod inplace_sct;
 pub mod inplace_sct_signed;
+pub mod tensorboard;
 
 pub struct CutDecomposition {
     mat: Mat<f64>,
