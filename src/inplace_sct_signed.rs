@@ -65,7 +65,7 @@ impl CutHelper {
         mut approximat: MatMut<f64>,
         rng: &mut impl rand::Rng,
         max_iterations: usize,
-    ) -> SignedCut {
+    ) -> (&Col<f64>, &Col<f64>, SignedCut) {
         let Self {
             t_signs,
             t_image,
@@ -131,7 +131,7 @@ impl CutHelper {
         let cut_matrix = scale(normalized_cut) * s_signs.as_ref() * t_signs.transpose();
         remainder -= &cut_matrix;
         approximat += cut_matrix;
-        cut
+        (s_signs, t_signs, cut)
     }
 }
 

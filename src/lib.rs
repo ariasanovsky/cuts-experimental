@@ -5,6 +5,7 @@ use rand::{prelude::SliceRandom, Rng};
 pub mod dfdx;
 #[cfg(feature = "old_stuff_that_didnt_work")]
 pub mod sct;
+pub mod sct_helper;
 #[cfg(feature = "old_stuff_that_didnt_work")]
 pub mod inplace_sct;
 pub mod inplace_sct_signed;
