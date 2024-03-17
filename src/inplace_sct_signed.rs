@@ -110,6 +110,22 @@ impl CutHelper {
                 break;
             }
         }
+        // `acc = alpha * acc + beta * lhs * rhs`
+        // `rem = 1.0 * rem - q * u * v`
+        // `alpha: f64 = 1.0`
+        // `beta = -q`, `q: f64`
+        // `lhs = u`, `u` a `[f64; m]` column as a `(m x 1)` matrix
+        // `rhs = v`, `v` a `[f64; n]` column as a `(1 x n)` matrix
+        // TODO! rewrite like
+        // matmul(
+        //     rem.rb_mut(),
+        //     u.rb().as_2d(),
+        //     v.rb().as_2d(),
+        //     Some(1.0),
+        //     -q,
+        //     faer::Parallelism::None,
+        // );
+
         let normalization = remainder.nrows() * remainder.ncols();
         let normalized_cut = cut.value / normalization as f64;
         let cut_matrix = scale(normalized_cut) * s_signs.as_ref() * t_signs.transpose();
