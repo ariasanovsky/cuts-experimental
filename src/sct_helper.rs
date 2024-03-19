@@ -4,19 +4,38 @@ pub struct SctHelper {
     s: Vec<u8>,
     t: Vec<u8>,
     c: Vec<f64>,
+    dims: SctDims,
+}
+
+pub struct SctDims {
+    pub nrows: usize,
+    pub ncols: usize,
+    pub rank: usize,
+}
+
+impl SctDims {
+    pub fn num_s_bytes(&self) -> usize {
+        self.nrows.div_ceil(8)
+    }
+
+    pub fn num_t_bytes(&self) -> usize {
+        self.ncols.div_ceil(8)
+    }
 }
 
 impl SctHelper {
     pub fn new(nrows: usize, ncols: usize, rank: usize) -> Self {
-        let s_length = nrows.div_ceil(8);
-        let t_length = ncols.div_ceil(8);
+        let dims = SctDims { nrows, ncols, rank };
         Self {
-            s: Vec::with_capacity(s_length * rank),
-            t: Vec::with_capacity(t_length * rank),
+            s: Vec::with_capacity(dims.num_s_bytes() * rank),
+            t: Vec::with_capacity(dims.num_t_bytes() * rank),
             c: Vec::with_capacity(rank),
+            dims: SctDims { nrows, ncols, rank },
         }
     }
 
+    /// Encodes both column vectors `[x{i}]_{i}` of floats as a binary sequence [b{i}]_{i}.
+    /// For each `i`, `b{i} = 1` iff `x{i} == 1.0`, and otherwise `b{i} = 0`.
     pub fn extend_with(&mut self, s_signs: &Col<f64>, t_signs: &Col<f64>, cut: f64) {
         let s_chunks = s_signs.as_slice().chunks(8);
         self.s.extend(s_chunks.map(|s_chunk| {
@@ -51,5 +70,9 @@ impl SctHelper {
 
     pub fn c(&self) -> &[f64] {
         self.c.as_slice()
+    }
+
+    pub fn dimensions(&self) -> &SctDims {
+        &self.dims
     }
 }
