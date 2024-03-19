@@ -94,8 +94,6 @@ impl CutHelper {
                 s_signs.as_mut(),
                 &mut cut,
             );
-            let prod = remainder.as_ref() * t_signs.as_ref();
-            let _cut = s_signs.transpose() * prod;
             if !improved_s {
                 break;
             }
@@ -243,7 +241,7 @@ fn improve_s(
             pos_count += 1;
         }
     }
-    cut.s_sizes = (pos_count, t_signs.nrows() - pos_count);
+    cut.s_sizes = (pos_count, s_signs.nrows() - pos_count);
     true
 }
 
