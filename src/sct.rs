@@ -47,7 +47,14 @@ impl SctApproximation<f64> {
         &self.c[self.rank - 1]
     }
 
-    pub fn extend(&mut self, rng: &mut impl Rng, mat: MatRef<f64>, trials: usize, at_least_half: bool, halved_cut: bool) {
+    pub fn extend(
+        &mut self,
+        rng: &mut impl Rng,
+        mat: MatRef<f64>,
+        trials: usize,
+        at_least_half: bool,
+        halved_cut: bool,
+    ) {
         assert_eq!(self.nrows, mat.nrows());
         assert_eq!(self.ncols, mat.ncols());
 
@@ -68,7 +75,8 @@ impl SctApproximation<f64> {
                 cut: 0.0,
             };
             for improvements in 0..(3 * self.nrows * self.ncols) {
-                let improved = self.optimize_cut(&mut s, &mut c, &mut t, mat, at_least_half, halved_cut);
+                let improved =
+                    self.optimize_cut(&mut s, &mut c, &mut t, mat, at_least_half, halved_cut);
                 if !improved {
                     break;
                 }
@@ -91,8 +99,7 @@ impl SctApproximation<f64> {
 
         if at_least_half {
             assert!(
-                2 * c_opt.s_size >= self.nrows &&
-                2 * c_opt.t_size >= self.ncols,
+                2 * c_opt.s_size >= self.nrows && 2 * c_opt.t_size >= self.ncols,
                 "{}, {}",
                 c_opt.s_size,
                 c_opt.t_size,
@@ -123,7 +130,15 @@ impl SctApproximation<f64> {
         (col, num_ones)
     }
 
-    fn optimize_cut(&self, s_new: &mut [bool], c_new: &mut Cut<f64>, t_new: &mut [bool], mat: MatRef<f64>, at_least_half: bool, halved_cut: bool) -> bool {
+    fn optimize_cut(
+        &self,
+        s_new: &mut [bool],
+        c_new: &mut Cut<f64>,
+        t_new: &mut [bool],
+        mat: MatRef<f64>,
+        at_least_half: bool,
+        halved_cut: bool,
+    ) -> bool {
         let improved_s = self.optimize_s(s_new, c_new, t_new, mat, at_least_half, halved_cut);
         // return improved_s;
         if !improved_s {
@@ -132,13 +147,21 @@ impl SctApproximation<f64> {
         self.optimize_t(s_new, c_new, t_new, mat, at_least_half, halved_cut)
     }
 
-    fn optimize_s(&self, s_new: &mut [bool], c_new: &mut Cut<f64>, t_new: &[bool], mat: MatRef<f64>, at_least_half: bool, halved_cut: bool) -> bool {
+    fn optimize_s(
+        &self,
+        s_new: &mut [bool],
+        c_new: &mut Cut<f64>,
+        t_new: &[bool],
+        mat: MatRef<f64>,
+        at_least_half: bool,
+        halved_cut: bool,
+    ) -> bool {
         // let num_s_bools = self.s.len();
         // let num_t_bools = self.t.len();
         // assert_eq!(num_s_bools, self.rank * self.nrows);
         // assert_eq!(num_t_bools, self.rank * self.ncols);
         // assert_eq!(self.c.len(), self.rank);
-        
+
         let mut prod = vec![0.0; self.nrows];
         let mut pos = vec![false; self.nrows];
         let mut neg = vec![false; self.nrows];
@@ -200,7 +223,15 @@ impl SctApproximation<f64> {
         }
     }
 
-    fn optimize_t(&self, s_new: &[bool], c_new: &mut Cut<f64>, t_new: &mut [bool], mat: MatRef<f64>, at_least_half: bool, halved_cut: bool) -> bool {
+    fn optimize_t(
+        &self,
+        s_new: &[bool],
+        c_new: &mut Cut<f64>,
+        t_new: &mut [bool],
+        mat: MatRef<f64>,
+        at_least_half: bool,
+        halved_cut: bool,
+    ) -> bool {
         let mut prod = vec![0.0; self.ncols];
         let mut pos = vec![false; self.ncols];
         let mut neg = vec![false; self.ncols];

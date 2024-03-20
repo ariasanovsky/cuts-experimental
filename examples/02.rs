@@ -3,9 +3,7 @@ use faer::{stats::UnitaryMat, Mat};
 use rand_distr::Distribution;
 
 fn main() {
-    let unitary_mats = UnitaryMat {
-        dimension: 8,
-    };
+    let unitary_mats = UnitaryMat { dimension: 8 };
     let mut rng = rand::thread_rng();
     let mat: Mat<f64> = unitary_mats.sample(&mut rng);
     dbg!(mat.squared_norm_l2());
@@ -15,6 +13,10 @@ fn main() {
         skt.extend(&mut rng, mat.as_ref(), 1_000, false, false);
         // println!("s = {:?}", skt.last_s());
         // println!("t = {:?}", skt.last_t());
-        println!("l2, cut{{{i}}} = {}, {:?}", skt.remainder(mat.as_ref(), false).squared_norm_l2(), skt.last_cut());
+        println!(
+            "l2, cut{{{i}}} = {}, {:?}",
+            skt.remainder(mat.as_ref(), false).squared_norm_l2(),
+            skt.last_cut()
+        );
     }
 }

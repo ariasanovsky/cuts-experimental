@@ -26,7 +26,8 @@ fn main() {
             &mut rng,
             1.0,
             1,
-        ).unwrap();
+        )
+        .unwrap();
         println!("i = {i}: {}, {}", leftover.norm_l2(), new_cut.cut_value);
         println!("{leftover:?}");
     }

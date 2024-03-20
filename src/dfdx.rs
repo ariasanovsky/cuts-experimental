@@ -1,4 +1,9 @@
-use dfdx::{nn::Module, shapes::{Const, Dim, Dtype, HasShape, Rank0, Rank1, Rank2}, tensor::{HasErr, SplitTape, Storage, Tape, Tensor}, tensor_ops::{BroadcastTo, ChooseFrom, Device, PermuteTo, TryAdd, TryMatMul}};
+use dfdx::{
+    nn::Module,
+    shapes::{Const, Dim, Dtype, HasShape, Rank0, Rank1, Rank2},
+    tensor::{HasErr, SplitTape, Storage, Tape, Tensor},
+    tensor_ops::{BroadcastTo, ChooseFrom, Device, PermuteTo, TryAdd, TryMatMul},
+};
 
 pub struct SctLinear<const I: usize, const K: usize, const O: usize, E: Dtype, D: Device<E>> {
     pub s: Tensor<Rank2<O, K>, bool, D>,
@@ -9,7 +14,8 @@ pub struct SctLinear<const I: usize, const K: usize, const O: usize, E: Dtype, D
     one: Tensor<Rank0, E, D>,
 }
 
-impl<const I: usize, const K: usize, const O: usize, E: Dtype, D: Device<E>, T> Module<T> for SctLinear<I, K, O, E, D>
+impl<const I: usize, const K: usize, const O: usize, E: Dtype, D: Device<E>, T> Module<T>
+    for SctLinear<I, K, O, E, D>
 where
     T: SplitTape + HasErr<Err = D::Err> + TryMatMul<Tensor<Rank2<I, K>, E, D, T::Tape>>,
     T::Tape: Tape<E, D>,
@@ -46,7 +52,7 @@ where
         // o.try_add(self.b.retaped::<T>().try_broadcast_like(&shape)?)
         Bias1D { beta: &self.b }.try_forward(o)
     }
-    
+
     fn forward(&self, input: T) -> Self::Output {
         self.try_forward(input).unwrap()
     }

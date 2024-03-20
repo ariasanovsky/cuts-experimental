@@ -1,4 +1,4 @@
-use cuts::CutDecomposition;
+use cuts::sct_old::CutDecomposition;
 use faer::{stats::UnitaryMat, Mat};
 use rand_distr::Distribution;
 
@@ -9,9 +9,7 @@ fn main() {
     //     ncols: 256,
     //     normal,
     // };
-    let unitary_mats = UnitaryMat {
-        dimension: 8,
-    };
+    let unitary_mats = UnitaryMat { dimension: 8 };
     let mut rng = rand::thread_rng();
     let mat: Mat<f64> = unitary_mats.sample(&mut rng);
     dbg!(mat.squared_norm_l2());

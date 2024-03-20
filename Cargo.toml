@@ -14,4 +14,4 @@ dfdx = { version = "0.13.0", optional = true }
 faer = "0.18.2"
 rand = "0.8.5"
 rand_distr = "0.4.3"
-tensorboard-writer = { git = "https://github.com/wchargin/rust-tensorboard-writer" }
+tensorboard-writer = { version = "0.2.0", git = "https://github.com/wchargin/rust-tensorboard-writer" }

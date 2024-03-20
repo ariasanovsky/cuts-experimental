@@ -1,4 +1,7 @@
-use faer::{reborrow::{Reborrow, ReborrowMut}, scale, ColMut, ColRef, MatMut, MatRef};
+use faer::{
+    reborrow::{Reborrow, ReborrowMut},
+    scale, ColMut, ColRef, MatMut, MatRef,
+};
 
 #[derive(Debug)]
 pub struct Cut {
@@ -50,7 +53,7 @@ pub fn cut_mat(
             // let cut_value = test_output.rb().transpose() * mat.rb() * test_input.rb();
             // assert_eq!(test_cut.cut_value, cut_value);
             if !improved_output {
-                break
+                break;
             }
             let improved_input = improve_input(
                 mat.rb(),
@@ -61,7 +64,7 @@ pub fn cut_mat(
             // let cut_value = test_output.rb().transpose() * mat.rb() * test_input.rb();
             // assert_eq!(test_cut.cut_value, cut_value);
             if !improved_input {
-                break
+                break;
             }
         }
         if test_cut.cut_value.abs() > optimal_cut.cut_value.abs() {
@@ -73,7 +76,7 @@ pub fn cut_mat(
     }
     let normalization = optimal_cut.input_size * optimal_cut.output_size;
     if normalization == 0 {
-        return None
+        return None;
     }
     let normalized_cut = optimal_cut.cut_value / normalization as f64;
     let optimal_input = optimal_input.transpose_mut();
@@ -106,7 +109,7 @@ fn improve_output(
     }
     let (new_count, new_cut) = if pos_sum > -neg_sum {
         if pos_sum < test_cut.cut_value.abs() {
-            return false
+            return false;
         }
         for i in 0..new_output.nrows() {
             if new_output.read(i) <= 0.0 {
@@ -118,7 +121,7 @@ fn improve_output(
         (pos_count, pos_sum)
     } else {
         if -neg_sum < test_cut.cut_value.abs() {
-            return false
+            return false;
         }
         for i in 0..new_output.nrows() {
             if new_output.read(i) >= 0.0 {
@@ -162,7 +165,7 @@ fn improve_input(
     }
     let (new_count, new_cut) = if pos_sum > -neg_sum {
         if pos_sum < test_cut.cut_value.abs() {
-            return false
+            return false;
         }
         for i in 0..new_input.ncols() {
             if new_input.read(i) <= 0.0 {
@@ -174,7 +177,7 @@ fn improve_input(
         (pos_count, pos_sum)
     } else {
         if -neg_sum < test_cut.cut_value.abs() {
-            return false
+            return false;
         }
         for j in 0..new_input.ncols() {
             if new_input.read(j) >= 0.0 {

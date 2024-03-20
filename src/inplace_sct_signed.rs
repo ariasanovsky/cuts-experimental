@@ -1,39 +1,8 @@
-use faer::{col, linalg::matmul::matmul, reborrow::{Reborrow, ReborrowMut}, row, scale, Col, ColMut, ColRef, MatMut, MatRef};
-
-pub struct FrobeniusNormTracker {
-    first_squared_norm: f64,
-    current_squared_norm: f64,
-}
-
-impl FrobeniusNormTracker {
-    pub fn new(squared_norm: f64) -> Self {
-        assert!(squared_norm >= 0.);
-        Self {
-            first_squared_norm: squared_norm,
-            current_squared_norm: squared_norm,
-        }
-    }
-
-    pub fn decrement_by_signed_cut(&mut self, cut_value: f64, nrows: usize, ncols: usize) {
-        self.current_squared_norm -= cut_value * cut_value / (nrows * ncols) as f64
-    }
-
-    pub fn norm(&self) -> f64 {
-        self.current_squared_norm.sqrt()
-    }
-
-    pub fn squared_norm(&self) -> f64 {
-        self.current_squared_norm
-    }
-
-    pub fn ratio(&self) -> f64 {
-        self.current_squared_norm / self.first_squared_norm
-    }
-    
-    pub fn squared_ratio(&self) -> f64 {
-        (self.current_squared_norm / self.first_squared_norm).sqrt()
-    }
-}
+use faer::{
+    linalg::matmul::matmul,
+    reborrow::{Reborrow, ReborrowMut},
+    Col, ColMut, ColRef, MatMut, MatRef,
+};
 
 #[derive(Debug)]
 pub struct SignedCut {
@@ -61,8 +30,8 @@ impl CutHelper {
 
     pub fn cut_mat(
         &mut self,
-        mut remainder: MatMut<f64>,
-        mut approximat: MatMut<f64>,
+        remainder: MatMut<f64>,
+        approximat: MatMut<f64>,
         rng: &mut impl rand::Rng,
         max_iterations: usize,
     ) -> (&Col<f64>, &Col<f64>, SignedCut) {
@@ -108,107 +77,35 @@ impl CutHelper {
                 break;
             }
         }
-        // `acc = alpha * acc + beta * lhs * rhs`
-        // `rem = 1.0 * rem - q * u * v`
-        // `alpha: f64 = 1.0`
-        // `beta = -q`, `q: f64`
-        // `lhs = u`, `u` a `[f64; m]` column as a `(m x 1)` matrix
-        // `rhs = v`, `v` a `[f64; n]` column as a `(1 x n)` matrix
-        // TODO! rewrite like
-        // matmul(
-        //     rem.rb_mut(),
-        //     u.rb().as_2d(),
-        //     v.rb().as_2d(),
-        //     Some(1.0),
-        //     -q,
-        //     faer::Parallelism::None,
-        // );
 
         let normalization = remainder.nrows() * remainder.ncols();
         let normalized_cut = cut.value / normalization as f64;
-        let cut_matrix = scale(normalized_cut) * s_signs.as_ref() * t_signs.transpose();
-        remainder -= &cut_matrix;
-        approximat += cut_matrix;
+        // let cut_matrix = scale(normalized_cut) * s_signs.as_ref() * t_signs.transpose();
+        // remainder -= &cut_matrix;
+        // `acc = alpha * acc + beta *     lhs *                 rhs`
+        // `rem =   1.0 * rem + (-q) * s_signs * t_signs.transpose()`
+        matmul(
+            remainder,                   // acc
+            s_signs.as_ref().as_2d(),    // lhs
+            t_signs.transpose().as_2d(), // rhs
+            Some(1.0),                   // alpha
+            -normalized_cut,             // beta
+            faer::Parallelism::None,     // parallelism
+        );
+        // approximat += cut_matrix;
+        // `acc = alpha * acc + beta *     lhs *                 rhs`
+        // `rem =   1.0 * rem + (-q) * s_signs * t_signs.transpose()`
+        matmul(
+            approximat,                  // acc
+            s_signs.as_ref().as_2d(),    // lhs
+            t_signs.transpose().as_2d(), // rhs
+            Some(1.0),                   // alpha
+            normalized_cut,              // beta
+            faer::Parallelism::None,     // parallelism
+        );
         (s_signs, t_signs, cut)
     }
 }
-
-// pub fn cut_mat_signed(
-//     mut remainder: MatMut<f64>,
-//     mut approximat: MatMut<f64>,
-//     mut optimal_input: ColMut<f64>,
-//     mut optimal_output: ColMut<f64>,
-//     mut test_input: ColMut<f64>,
-//     mut test_output: ColMut<f64>,
-//     rng: &mut impl rand::Rng,
-//     trials: usize,
-//     max_loops: usize,
-// ) -> SignedCut {
-//     todo!();
-    // optimal_input.fill_zero();
-    // optimal_output.fill_zero();
-    // let mut optimal_cut = SignedCut {
-    //     pos_inputs: 0,
-    //     pos_outputs: 0,
-    //     cut_value: 0.0,
-    // };
-    // for _trial in 0..trials {
-    //     let mut pos_inputs = 0;
-    //     for i in 0..test_input.nrows() {
-    //         if rng.gen() {
-    //             test_input.write(i, 1.0);
-    //             pos_inputs += 1;
-    //         } else {
-    //             test_input.write(i, -1.0);
-    //         }
-    //     }
-    //     test_output.fill(0.0);
-    //     let mut test_cut = SignedCut {
-    //         pos_inputs,
-    //         pos_outputs: 0,
-    //         cut_value: 0.0,
-    //     };
-    //     for _ in 0..max_loops {
-    //         let improved_output = improve_output(
-    //             remainder.rb(),
-    //             test_input.rb(),
-    //             test_output.rb_mut(),
-    //             &mut test_cut,
-    //         );
-    //         // let cut_value = test_output.rb().transpose() * mat.rb() * test_input.rb();
-    //         // assert_eq!(test_cut.cut_value, cut_value);
-    //         if !improved_output {
-    //             break
-    //         }
-    //         let improved_input = improve_input(
-    //             remainder.rb(),
-    //             test_input.rb_mut(),
-    //             test_output.rb(),
-    //             &mut test_cut,
-    //         );
-    //         // let cut_value = test_output.rb().transpose() * mat.rb() * test_input.rb();
-    //         // assert_eq!(test_cut.cut_value, cut_value);
-
-    //         if !improved_input {
-    //             break
-    //         }
-    //     }
-    //     if test_cut.cut_value.abs() > optimal_cut.cut_value.abs() {
-    //         // dbg!(&test_cut);
-    //         optimal_cut = test_cut;
-    //         optimal_input.copy_from(test_input.rb());
-    //         optimal_output.copy_from(test_output.rb());
-    //     }
-    // }
-    // let normalization = remainder.nrows() * remainder.ncols();
-    // let normalized_cut = optimal_cut.cut_value / normalization as f64;
-    // let optimal_input = optimal_input.transpose_mut();
-    // let cut_matrix = scale(normalized_cut) * optimal_output * optimal_input;
-
-    // remainder -= &cut_matrix;
-    // approximat += cut_matrix;
-    // optimal_cut
-// }
 
 fn improve_s(
     mat: MatRef<f64>,
@@ -227,7 +124,7 @@ fn improve_s(
     );
     let new_cut = t_image.norm_l1();
     if new_cut <= cut.value {
-        return false
+        return false;
     } else {
         cut.value = new_cut
     }
@@ -262,7 +159,7 @@ fn improve_t(
     );
     let new_cut = s_image.norm_l1();
     if new_cut <= test_cut.value {
-        return false
+        return false;
     } else {
         test_cut.value = new_cut
     }
