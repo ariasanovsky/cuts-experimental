@@ -27,7 +27,7 @@ pub fn cut_mat(
         output_size: 0,
         cut_value: 0.0,
     };
-    for trial in 0..trials {
+    for _trial in 0..trials {
         let mut input_size = 0;
         for i in 0..test_input.nrows() {
             if rng.gen() {

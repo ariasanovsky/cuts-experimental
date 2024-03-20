@@ -116,7 +116,7 @@ impl SctApproximation<f64> {
         t.extend(t_opt.into_iter());
     }
 
-    fn generate_col(nrows: usize, rng: &mut impl Rng, at_least_half: bool) -> (Vec<bool>, usize) {
+    fn generate_col(nrows: usize, rng: &mut impl Rng, _at_least_half: bool) -> (Vec<bool>, usize) {
         assert!(nrows > 0);
         if nrows == 1 {
             return (vec![true], 1);
@@ -153,7 +153,7 @@ impl SctApproximation<f64> {
         c_new: &mut Cut<f64>,
         t_new: &[bool],
         mat: MatRef<f64>,
-        at_least_half: bool,
+        _at_least_half: bool,
         halved_cut: bool,
     ) -> bool {
         // let num_s_bools = self.s.len();
@@ -229,7 +229,7 @@ impl SctApproximation<f64> {
         c_new: &mut Cut<f64>,
         t_new: &mut [bool],
         mat: MatRef<f64>,
-        at_least_half: bool,
+        _at_least_half: bool,
         halved_cut: bool,
     ) -> bool {
         let mut prod = vec![0.0; self.ncols];
