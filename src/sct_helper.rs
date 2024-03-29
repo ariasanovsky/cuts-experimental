@@ -1,6 +1,6 @@
 use faer::Col;
 
-pub struct SctHelper {
+pub struct Sct {
     s: Vec<u8>,
     t: Vec<u8>,
     c: Vec<f64>,
@@ -8,9 +8,9 @@ pub struct SctHelper {
 }
 
 pub struct SctDims {
-    pub nrows: usize,
-    pub ncols: usize,
-    pub rank: usize,
+    nrows: usize,
+    ncols: usize,
+    rank: usize,
 }
 
 impl SctDims {
@@ -21,9 +21,21 @@ impl SctDims {
     pub fn num_t_bytes(&self) -> usize {
         self.ncols.div_ceil(8)
     }
+
+    pub fn nrows(&self) -> usize {
+        self.nrows
+    }
+
+    pub fn ncols(&self) -> usize {
+        self.ncols
+    }
+
+    pub fn rank(&self) -> usize {
+        self.rank
+    }
 }
 
-impl SctHelper {
+impl Sct {
     pub fn new(nrows: usize, ncols: usize, rank: usize) -> Self {
         let dims = SctDims { nrows, ncols, rank };
         Self {
