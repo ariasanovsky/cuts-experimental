@@ -110,7 +110,7 @@ impl CutHelper {
     }
 }
 
-fn improve_s(
+pub(crate) fn improve_s(
     mat: MatRef<f64>,
     t_signs: ColRef<f64>,
     mut t_image: ColMut<f64>,
@@ -146,7 +146,7 @@ fn improve_s(
     true
 }
 
-fn improve_t(
+pub(crate) fn improve_t(
     mat: MatRef<f64>,
     s_signs: ColRef<f64>,
     mut s_image: ColMut<f64>,
