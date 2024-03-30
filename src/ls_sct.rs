@@ -1,10 +1,11 @@
-use faer::{linalg::zip::MatShape, reborrow::Reborrow, Col, Mat, MatMut, MatRef};
+use dyn_stack::ReborrowMut;
+use faer::{mat::As2D, reborrow::Reborrow, Col, Mat, MatRef};
 
-use crate::{inplace_sct_signed::{improve_s, improve_t, SignedCut}, sct_helper::Sct};
+use crate::{bit_magic::{cache_parameters_avx2, lazy_matmul_avx2}, inplace_sct_signed::{improve_s, improve_t, SignedCut}, sct_helper::Sct};
 
 pub struct CutSetLdl {
     // `-s` where `s = nrows * ncols`, the flat dimension of `H`, our space of tensors
-    negative_s: f64,
+    s_recip: f64,
     // `- s * M^T` where `M = L^{-1}` and `X^TX = s * LL^T` (ldl w/ `D = s * I`)
     m_t: Mat<f64>,
 }
@@ -13,33 +14,74 @@ impl CutSetLdl {
     pub fn new(nrows: usize, ncols: usize, rank: usize) -> Self {
         let s = (nrows * ncols) as f64;
         let m_t = Mat::with_capacity(rank, rank);
-        Self { negative_s: s, m_t }
+        Self { s_recip: s.recip(), m_t }
     }
 
-    pub fn add_column(&mut self, sct: &Sct, cut: &SignedCut, remainder: MatMut<f64>) -> f64 {
-        let Self { negative_s, m_t } = self;
+    pub fn add_column(&mut self, sct: &Sct, cut: &SignedCut, remainder: &mut Mat<f64>) -> f64 {
+        let Self { s_recip, m_t } = self;
         // we are writing into a new column of `m_t`
         // the previous uninitialized data is completely overwritten
         let old_rank = m_t.nrows();
-        debug_assert_eq!(old_rank, m_t.ncols());
         let new_rank = old_rank + 1;
-        debug_assert!(m_t.col_capacity() >= new_rank);
-        debug_assert!(m_t.row_capacity() >= new_rank);
-        unsafe {
-            m_t.set_dims(new_rank, new_rank);
-            m_t.write_unchecked(old_rank, old_rank, *negative_s);
-        };
-        let (m_t, col) = m_t.as_mut().split_at_col_mut(old_rank);
-        debug_assert_eq!(m_t.ncols(), old_rank);
-        debug_assert_eq!(m_t.nrows(), new_rank);
-        debug_assert_eq!(col.ncols(), 1);
-        debug_assert_eq!(col.nrows(), new_rank);
-        let m_t = m_t.as_ref().subrows(0, old_rank);
-        debug_assert_eq!(m_t.ncols(), old_rank);
-        debug_assert_eq!(m_t.nrows(), old_rank);
-        let col = col.subrows_mut(0, old_rank);
-        debug_assert_eq!(col.ncols(), 1);
-        debug_assert_eq!(col.nrows(), old_rank);
+        unsafe { m_t.set_dims(new_rank, new_rank) };
+        // z{k+1}       = X{k}^T * x{k+1}
+        let col_top = m_t.col_as_slice_mut(old_rank);
+        let it = sct.latest_inner_products(old_rank);
+        let it = it.chain(core::iter::once(1.0));
+        col_top
+            .iter_mut()
+            .zip(it)
+            .for_each(|(a, b)| {
+                *a = b
+            });
+        let (m_t_old, mut col) = m_t.as_mut().split_at_col_mut(old_rank);
+        let m_t_old = m_t_old.as_ref().subrows(0, old_rank);
+        // l{k+1}'      = M{k}   * z{k+1}
+        use faer::linalg::matmul::triangular::{BlockStructure, matmul, matmul_with_conj};
+        // TODO! allocates, use `matmul` instead
+        let l = m_t_old.as_ref() * col.rb().subrows(0, old_rank);
+        // m{k+1}       = -s^{-1} * M{k}^T * l{k+1}'
+        // n{k+1}       = m{k+1} (+) 1
+        matmul_with_conj(
+            col.rb_mut().subrows_mut(0, old_rank),
+            BlockStructure::Rectangular,
+            m_t_old.as_ref(),
+            BlockStructure::UnitTriangularUpper,
+            faer::Conj::Yes,
+            l.as_2d_ref(),
+            BlockStructure::Rectangular,
+            faer::Conj::No,
+            None,
+            -*s_recip,
+            faer::Parallelism::None,
+        );
+        let n = m_t.col_as_slice(old_rank);
+        // alpha{k+1}  = <x{k+1}, r{k}>
+        let alpha = cut.value;
+        // alpha{k+1}' = - alpha{k+1} / s
+        let alpha = -alpha * *s_recip;
+        // r{k+1}      = r{k} + alpha{k+1}' * X{k+1}^T * n{k+1}
+        let nrows = remainder.nrows();
+        let ncols = remainder.ncols();
+        let cache_params = cache_parameters_avx2(nrows, ncols, new_rank);
+        let dst = todo!();
+        // check majorization requirements
+        let lhs = sct.s();
+        let rhs = sct.t();
+        let rhs_layout = crate::bit_magic::Layout::RowMajor;
+        let stack = todo!();
+        lazy_matmul_avx2(
+            cache_params,
+            nrows,
+            ncols,
+            old_rank,
+            dst,
+            lhs,
+            n,
+            rhs,
+            rhs_layout,
+            stack,
+        );
         todo!()
     }
 }

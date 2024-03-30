@@ -155,9 +155,14 @@ name = "cuts"
 version = "0.1.0"
 dependencies = [
  "dfdx",
+ "dyn-stack 0.10.0",
+ "equator 0.2.0",
  "faer",
+ "gemm-common 0.17.1",
+ "pulp",
  "rand",
  "rand_distr",
+ "seq-macro",
  "tensorboard-writer",
 ]
 
@@ -236,7 +241,16 @@ version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a3b0a88aa91d0ad2b9684e4479aed31a17d3f9051bdbbc634bd2c01bc5a5eee8"
 dependencies = [
- "equator-macro",
+ "equator-macro 0.1.9",
+]
+
+[[package]]
+name = "equator"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c19b2e3ba9d98d382355164df1592bbe0d75380723dedfa2767c014486d1ac2"
+dependencies = [
+ "equator-macro 0.2.0",
 ]
 
 [[package]]
@@ -244,6 +258,17 @@ name = "equator-macro"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60d08acb9849f7fb4401564f251be5a526829183a3645a90197dea8e786cf3ae"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.52",
+]
+
+[[package]]
+name = "equator-macro"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ece5c3754bd15dcc30edd99a2f40625afc46cc1b38671d2f8c34f715fb8c18b0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -260,7 +285,7 @@ dependencies = [
  "coe-rs",
  "dbgf",
  "dyn-stack 0.10.0",
- "equator",
+ "equator 0.1.10",
  "faer-entity",
  "gemm 0.17.1",
  "libm",
@@ -788,9 +813,9 @@ dependencies = [
 
 [[package]]
 name = "pulp"
-version = "0.18.8"
+version = "0.18.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "091bad01115892393939669b38f88ff2b70838e969a7ac172a9d06d05345a732"
+checksum = "03457ac216146f43f921500bac4e892d5cd32b0479b929cbfc90f95cd6c599c2"
 dependencies = [
  "bytemuck",
  "libm",
