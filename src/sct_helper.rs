@@ -104,13 +104,17 @@ impl Sct {
         let num_s_bits = self.dims.nrows as isize;
         let num_t_bits = self.dims.ncols as isize;
         let foo = s_old.zip(t_old).map(move |(s_old, t_old)| {
-            let s_negative_ones = s_old.iter().zip(s_new.iter()).map(|(s_old, s_new)| {
-                (*s_old ^ *s_new).count_ones()
-            }).sum::<u32>() as isize;
+            let s_negative_ones = s_old
+                .iter()
+                .zip(s_new.iter())
+                .map(|(s_old, s_new)| (*s_old ^ *s_new).count_ones())
+                .sum::<u32>() as isize;
             let s_dot = num_s_bits - 2 * s_negative_ones;
-            let t_negative_ones = t_old.iter().zip(t_new.iter()).map(|(t_old, t_new)| {
-                (*t_old ^ *t_new).count_ones()
-            }).sum::<u32>() as isize;
+            let t_negative_ones = t_old
+                .iter()
+                .zip(t_new.iter())
+                .map(|(t_old, t_new)| (*t_old ^ *t_new).count_ones())
+                .sum::<u32>() as isize;
             let t_dot = num_t_bits - 2 * t_negative_ones;
             dbg!(s_negative_ones, s_dot, t_negative_ones, t_old);
             todo!();

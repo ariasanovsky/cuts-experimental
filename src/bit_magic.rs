@@ -30,16 +30,13 @@
 use dyn_stack::PodStack;
 use equator::{assert, debug_assert};
 #[cfg(not(feature = "nightly"))]
-use pulp::{
-    f64x4, u64x4, x86::V3,
-};
+use pulp::{f64x4, u64x4, x86::V3};
 
 #[cfg(feature = "nightly")]
 use pulp::{
     b8, f64x4, f64x8, u64x4,
     x86::{V3, V4},
 };
-
 
 #[derive(Copy, Clone, Debug)]
 pub(crate) struct CacheParams {

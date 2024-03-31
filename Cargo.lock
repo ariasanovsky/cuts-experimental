@@ -3,6 +3,12 @@
 version = 3
 
 [[package]]
+name = "aligned-vec"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4aa90d7ce82d4be67b64039a3d588d38dbcc6736577de4a847025ce5b0c468d1"
+
+[[package]]
 name = "anyhow"
 version = "1.0.81"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -154,6 +160,7 @@ checksum = "f1871a911a2b9a3f66a285896a719159985683bf9903aa2cf89e0c9f53e14552"
 name = "cuts"
 version = "0.1.0"
 dependencies = [
+ "aligned-vec",
  "dfdx",
  "dyn-stack 0.10.0",
  "equator 0.2.0",

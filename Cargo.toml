@@ -10,6 +10,7 @@ dfdx_layer = ["dfdx"]
 old_stuff_that_didnt_work = []
 
 [dependencies]
+aligned-vec = "0.5.0"
 dfdx = { version = "0.13.0", optional = true }
 dyn-stack = "0.10.0"
 equator = "0.2.0"

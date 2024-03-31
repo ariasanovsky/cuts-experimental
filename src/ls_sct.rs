@@ -1,7 +1,12 @@
 use dyn_stack::ReborrowMut;
 use faer::{mat::As2D, reborrow::Reborrow, Col, Mat, MatRef};
 
-use crate::{bit_magic::{cache_parameters_avx2, lazy_matmul_avx2}, inplace_sct_signed::{improve_s, improve_t, SignedCut}, sct_helper::Sct};
+use crate::{
+    bit_magic::{cache_parameters_avx2, lazy_matmul_avx2},
+    faer::FlatMat,
+    inplace_sct_signed::{improve_s, improve_t, SignedCut},
+    sct_helper::Sct,
+};
 
 pub struct CutSetLdl {
     // `-s` where `s = nrows * ncols`, the flat dimension of `H`, our space of tensors
@@ -14,10 +19,14 @@ impl CutSetLdl {
     pub fn new(nrows: usize, ncols: usize, rank: usize) -> Self {
         let s = (nrows * ncols) as f64;
         let m_t = Mat::with_capacity(rank, rank);
-        Self { s_recip: s.recip(), m_t }
+        Self {
+            s_recip: s.recip(),
+            m_t,
+        }
     }
 
-    pub fn add_column(&mut self, sct: &Sct, cut: &SignedCut, remainder: &mut Mat<f64>) -> f64 {
+    pub fn add_column(&mut self, sct: &Sct, cut: &SignedCut, remainder: &mut FlatMat) -> f64 {
+        let faer_remainder = remainder.as_mut();
         let Self { s_recip, m_t } = self;
         // we are writing into a new column of `m_t`
         // the previous uninitialized data is completely overwritten
@@ -28,16 +37,11 @@ impl CutSetLdl {
         let col_top = m_t.col_as_slice_mut(old_rank);
         let it = sct.latest_inner_products(old_rank);
         let it = it.chain(core::iter::once(1.0));
-        col_top
-            .iter_mut()
-            .zip(it)
-            .for_each(|(a, b)| {
-                *a = b
-            });
+        col_top.iter_mut().zip(it).for_each(|(a, b)| *a = b);
         let (m_t_old, mut col) = m_t.as_mut().split_at_col_mut(old_rank);
         let m_t_old = m_t_old.as_ref().subrows(0, old_rank);
         // l{k+1}'      = M{k}   * z{k+1}
-        use faer::linalg::matmul::triangular::{BlockStructure, matmul, matmul_with_conj};
+        use faer::linalg::matmul::triangular::{matmul, matmul_with_conj, BlockStructure};
         // TODO! allocates, use `matmul` instead
         let l = m_t_old.as_ref() * col.rb().subrows(0, old_rank);
         // m{k+1}       = -s^{-1} * M{k}^T * l{k+1}'
@@ -65,8 +69,8 @@ impl CutSetLdl {
         let diag = faer::scale(alpha) * n;
         let diag = diag.as_slice();
         // r{k+1}      = r{k} + alpha{k+1}' * X{k+1}^T * n{k+1}
-        let nrows = remainder.nrows();
-        let ncols = remainder.ncols();
+        let nrows = faer_remainder.nrows();
+        let ncols = faer_remainder.ncols();
         let cache_params = cache_parameters_avx2(nrows, ncols, new_rank);
         // check majorization requirements
         lazy_matmul_avx2(

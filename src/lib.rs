@@ -1,8 +1,8 @@
 pub mod bit_magic;
 #[cfg(feature = "dfdx")]
 pub mod dfdx;
-#[cfg(feature = "old_stuff_that_didnt_work")]
 pub mod faer;
+#[cfg(feature = "old_stuff_that_didnt_work")]
 pub mod inplace_sct;
 pub mod inplace_sct_signed;
 pub mod ls_sct;
