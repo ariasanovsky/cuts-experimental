@@ -55,32 +55,31 @@ impl CutSetLdl {
             -*s_recip,
             faer::Parallelism::None,
         );
-        let n = m_t.col_as_slice(old_rank);
+        let n = m_t.as_ref().col(old_rank);
         // alpha{k+1}  = <x{k+1}, r{k}>
         let alpha = cut.value;
-        // alpha{k+1}' = - alpha{k+1} / s
+        // alpha{k+1}' = -alpha{k+1} / s
         let alpha = -alpha * *s_recip;
+        // n{k+1}'     = alpha{k+1}' * n{k+1}
+        // TODO! allocates
+        let diag = faer::scale(alpha) * n;
+        let diag = diag.as_slice();
         // r{k+1}      = r{k} + alpha{k+1}' * X{k+1}^T * n{k+1}
         let nrows = remainder.nrows();
         let ncols = remainder.ncols();
         let cache_params = cache_parameters_avx2(nrows, ncols, new_rank);
-        let dst = todo!();
         // check majorization requirements
-        let lhs = sct.s();
-        let rhs = sct.t();
-        let rhs_layout = crate::bit_magic::Layout::RowMajor;
-        let stack = todo!();
         lazy_matmul_avx2(
             cache_params,
             nrows,
             ncols,
             old_rank,
-            dst,
-            lhs,
-            n,
-            rhs,
-            rhs_layout,
-            stack,
+            todo!(),
+            sct.s(),
+            diag,
+            sct.t(),
+            crate::bit_magic::Layout::RowMajor,
+            dyn_stack::PodStack::new(&mut []),
         );
         todo!()
     }
