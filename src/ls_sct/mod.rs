@@ -1,5 +1,5 @@
 use dyn_stack::ReborrowMut;
-use faer::{mat::As2D, reborrow::Reborrow, Col, Mat, MatRef};
+use faer::{linalg::zip::MatShape, mat::As2D, reborrow::Reborrow, Col, Mat, MatRef};
 
 use crate::{
     bit_magic::{cache_parameters_avx2, lazy_matmul_avx2},
@@ -8,10 +8,12 @@ use crate::{
     sct_helper::Sct,
 };
 
+mod tests;
+
 pub struct CutSetLdl {
     // `-s` where `s = nrows * ncols`, the flat dimension of `H`, our space of tensors
     s_recip: f64,
-    // `- s * M^T` where `M = L^{-1}` and `X^TX = s * LL^T` (ldl w/ `D = s * I`)
+    // `M^T` where `M = L^{-1}` and `X^TX = s * LL^T` (ldl w/ `D = s * I`)
     m_t: Mat<f64>,
 }
 
@@ -38,54 +40,67 @@ impl CutSetLdl {
         let it = sct.latest_inner_products(old_rank);
         let it = it.chain(core::iter::once(1.0));
         col_top.iter_mut().zip(it).for_each(|(a, b)| *a = b);
+        eprintln!("extended w/ inner products:\n{m_t:?}");
         let (m_t_old, mut col) = m_t.as_mut().split_at_col_mut(old_rank);
         let m_t_old = m_t_old.as_ref().subrows(0, old_rank);
         // l{k+1}'      = M{k}   * z{k+1}
-        use faer::linalg::matmul::triangular::{matmul, matmul_with_conj, BlockStructure};
+        use faer::linalg::matmul::triangular::{matmul, BlockStructure};
         // TODO! allocates, use `matmul` instead
-        let l = m_t_old.as_ref() * col.rb().subrows(0, old_rank);
+        let l = m_t_old.transpose() * col.rb().subrows(0, old_rank);
+        eprintln!("l' = {l:?}");
         // m{k+1}       = -s^{-1} * M{k}^T * l{k+1}'
         // n{k+1}       = m{k+1} (+) 1
-        matmul_with_conj(
+        matmul(
             col.rb_mut().subrows_mut(0, old_rank),
             BlockStructure::Rectangular,
             m_t_old.as_ref(),
             BlockStructure::UnitTriangularUpper,
-            faer::Conj::Yes,
             l.as_2d_ref(),
             BlockStructure::Rectangular,
-            faer::Conj::No,
             None,
             -*s_recip,
             faer::Parallelism::None,
         );
+        // dbg!(col.rb().subrows(0, old_rank).squared_norm_l2());
+        eprintln!("filled w/ m:\n{m_t:?}");
         let n = m_t.as_ref().col(old_rank);
+        assert_eq!(n.nrows(), new_rank);
+        eprintln!("n = {n:?}");
         // alpha{k+1}  = <x{k+1}, r{k}>
-        let alpha = cut.value;
-        // alpha{k+1}' = -alpha{k+1} / s
-        let alpha = -alpha * *s_recip;
-        // n{k+1}'     = alpha{k+1}' * n{k+1}
+        let (k, s, t) = sct.padded_slices();
+        eprintln!("s = {s:?}");
+        eprintln!("t = {t:?}");
         // TODO! allocates
-        let diag = faer::scale(alpha) * n;
-        let diag = diag.as_slice();
+        let mut diag_padded = Col::zeros(k);
+        let mut diag = diag_padded.as_mut().subrows_mut(0, new_rank);
+        let scale = faer::scale(- cut.value * *s_recip);
+        dbg!(cut.value, scale);
+        let this_allocates = scale * n;
+        diag.copy_from(this_allocates);
+        let diag = diag_padded.as_slice();
+        eprintln!("diag = {diag:?}");
         // r{k+1}      = r{k} + alpha{k+1}' * X{k+1}^T * n{k+1}
         let nrows = faer_remainder.nrows();
         let ncols = faer_remainder.ncols();
-        let cache_params = cache_parameters_avx2(nrows, ncols, new_rank);
+        let cache_params = cache_parameters_avx2(nrows, ncols, k);
         // check majorization requirements
+        // TODO! pad everything and manage the pointer math better'
+        // TODO! this requires a few refactors in `Sct`: `0`-initialize buffers and manually manage rank, no Vecs
+        // dbg!(k);
         lazy_matmul_avx2(
             cache_params,
             nrows,
             ncols,
-            old_rank,
-            todo!(),
-            sct.s(),
+            k,
+            remainder.slice_mut(),
+            s,
             diag,
-            sct.t(),
+            t,
             crate::bit_magic::Layout::RowMajor,
             dyn_stack::PodStack::new(&mut []),
         );
-        todo!()
+        0.0
+        // todo!()
     }
 }
 

@@ -10,7 +10,7 @@ pub struct FlatMat {
 impl FlatMat {
     pub fn zeros(nrows: usize, ncols: usize) -> Self {
         assert!(nrows % 8 == 0);
-        assert!(ncols & 8 == 0);
+        assert!(ncols % 8 == 0);
         Self {
             nums: aligned_vec::avec![0.0; nrows * ncols],
             nrows,
@@ -29,5 +29,9 @@ impl FlatMat {
 
     pub fn as_mut(&mut self) -> MatMut<f64> {
         faer::mat::from_column_major_slice_mut(self.nums.as_mut_slice(), self.nrows, self.ncols)
+    }
+
+    pub fn slice_mut(&mut self) -> &mut [f64] {
+        &mut self.nums
     }
 }
