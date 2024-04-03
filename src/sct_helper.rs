@@ -154,7 +154,7 @@ impl Sct {
                 .map(|(t_old, t_new)| (*t_old ^ *t_new).count_ones())
                 .sum::<u32>() as isize;
             let t_dot = num_t_bits - 2 * t_negative_ones;
-            dbg!(s_dot, t_dot);
+            // dbg!(s_dot, t_dot);
             // todo!();
             (s_dot * t_dot) as f64
         });

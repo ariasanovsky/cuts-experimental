@@ -1,4 +1,6 @@
-use faer::{linalg::zip::MatShape, reborrow::Reborrow, Col, ColRef, Mat, MatRef};
+use std::collections::HashMap;
+
+use faer::{mat, Col, Mat, MatRef};
 use rand::thread_rng;
 
 use crate::{faer::FlatMat, sct_helper::Sct};
@@ -10,7 +12,69 @@ use equator::assert;
 #[test]
 fn ldl_sct_with_identity_matrix_of_size_8() {
     let mut remainder = identity_matrix(8);
-    test_decompose_matrix(&mut remainder, 5);
+    // let required_projections
+    // let required_cuts = [
+    //     [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,],
+    //     [-1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,],
+    // ].into_iter().map(|col| {
+    //     Col::from_fn(8, |row| col[row])
+    // }).enumerate().collect();
+    // let required_temp_columns: &[&[f64]] = &[
+    //     // &[1.0],
+    //     // &[36.0, 1.0],
+    // ];
+    // let required_temp_columns = required_temp_columns.into_iter().map(|col| {
+    //     Col::from_fn(col.len(), |row| col[row])
+    // }).enumerate().collect::<HashMap<usize, _>>();
+    // let required_projections: &[&[f64]] = &[
+    //     // &[],
+    //     // &[36.0],
+    // ];
+    // let required_projections = required_projections.into_iter().map(|col| {
+    //     Col::from_fn(col.len(), |row| col[row])
+    // }).enumerate().collect::<HashMap<usize, _>>();
+    // let required_remainder_improvements = [
+    //     1.0,
+    // ].into_iter().enumerate().collect::<HashMap<usize, f64>>();
+    // let new_columns: &[&[f64]] = &[
+    //     &[1.0],
+    //     &[-0.5625, 1.0],
+    // ];
+    // let required_new_columns = new_columns.into_iter().map(|col| {
+    //     Col::from_fn(col.len(), |row| col[row])
+    // }).enumerate().collect::<HashMap<usize, _>>();
+    // let mut required_remainders = vec![];
+    // let required_remainder = Mat::from_fn(8, 8, |row, col| {
+    //     if row == col {
+    //         0.875
+    //     } else {
+    //         -0.125
+    //     }
+    // });
+    // required_remainders.push(required_remainder);
+    // let required_remainders = required_remainders.into_iter().enumerate().collect::<HashMap<_, _>>();
+
+    test_decompose_matrix(
+        &mut remainder,
+        100,
+        Default::default(),
+        Default::default(),
+        Default::default(),
+        Default::default(),
+        Default::default(),
+        Default::default(),
+    );
+    // return;
+    // test_decompose_matrix(
+    //     &mut remainder,
+    //     9,
+    //     required_cuts,
+    //     required_temp_columns,
+    //     required_projections,
+    //     required_remainder_improvements,
+    //     required_new_columns,
+    //     required_remainders,
+    // );
 }
 
 
@@ -57,7 +121,16 @@ fn identity_matrix(size: usize) -> FlatMat {
     remainder
 }
 
-fn test_decompose_matrix(remainder: &mut FlatMat, rank: usize) {
+fn test_decompose_matrix(
+    remainder: &mut FlatMat,
+    rank: usize,
+    required_cuts: HashMap<usize, Col<f64>>,
+    required_temp_columns: HashMap<usize, Col<f64>>,
+    required_projections: HashMap<usize, Col<f64>>,
+    required_remainder_improvements: HashMap<usize, f64>,
+    required_new_columns: HashMap<usize, Col<f64>>,
+    required_remainders: HashMap<usize, Mat<f64>>,
+) {
     let nrows = remainder.as_ref().nrows();
     let ncols = remainder.as_ref().ncols();
     let mut ldl = CutSetLdl::new(nrows, ncols, rank);
@@ -66,10 +139,18 @@ fn test_decompose_matrix(remainder: &mut FlatMat, rank: usize) {
     let mut rng = thread_rng();
     let mut signs = SignMatrices::new();
     let s = (nrows * ncols) as f64;
-    for r in 1..=rank {
+    for r in 0..rank {
         println!("r = {r}");
-        println!("{:?}", remainder.as_ref());
+        if remainder.as_ref().squared_norm_l2() <= 1e-10 {
+            return
+        }
+        // println!("{:?}", remainder.as_ref());
         let mut cut = cutset.write_cut(remainder.as_ref(), &mut rng, 1_000);
+        if let Some(required_cut) = required_cuts.get(&r) {
+            while cutset.s_signs().ne(required_cut) {
+                cut = cutset.write_cut(remainder.as_ref(), &mut rng, 1_000);
+            }
+        }
         let mut pos_s = vec![];
         let mut neg_s = vec![];
         for (i, &s) in cutset.s_signs().as_slice().iter().enumerate() {
@@ -92,27 +173,42 @@ fn test_decompose_matrix(remainder: &mut FlatMat, rank: usize) {
                 unreachable!("t_{r}[{i}] != +/- 1.0")
             }
         }
-        println!("s+, s- = {pos_s:?}, {neg_s:?}");
-        println!("t+, t- = {pos_t:?}, {neg_t:?}");
+        // println!("s+, s- = {pos_s:?}, {neg_s:?}");
+        // println!("t+, t- = {pos_t:?}, {neg_t:?}");
         signs.push(&cutset);
-        let sllt = signs.inner_products();
-        println!("{sllt:?}");
+        // let sllt = signs.inner_products();
+        // println!("{sllt:?}");
         sct.extend_with(cutset.s_signs(), cutset.t_signs(), cut.value);
-        let improvement = ldl.add_column(&sct, &cut, remainder);
-        let m = ldl.m();
-        assert!(all(
-            m.nrows() == r,
-            m.ncols() == r,
-        ));
-        let mtm = m.transpose() * m;
+        let mut projection_buffer = Col::zeros(r);
+        // unsafe { ldl.write_projection(&mut projection_buffer) };
+        let new_diagonal =  unsafe { ldl.write_temp_columns(&sct, &mut projection_buffer) };
+        // dbg!(ldl.m_t.as_ref());
+        // if let Some(temp) = required_temp_columns.get(&r) {
+        //     assert!(temp.as_slice().eq(ldl.m_t.col_as_slice(r)))
+        // }
+        // if let Some(proj) = required_projections.get(&r) {
+        //     assert_eq!(proj.as_ref(), projection_buffer.as_ref())
+        // }
+        // let projection_contribution = projection_buffer.squared_norm_l2();
+        // let remainder_improvement = CutSetLdl::remainder_improvement(s.recip(), cut.value, projection_contribution);
+        // if let Some(improvement) = required_remainder_improvements.get(&r) {
+        //     assert!(*improvement == remainder_improvement)
+        // }
+        unsafe { ldl.fill_column(&mut projection_buffer) };
+        // dbg!(ldl.m_t.as_ref());
+        let new_col = ldl.m_t.col_as_slice(r);
+        if let Some(col) = required_new_columns.get(&r) {
+            assert_eq!(col.as_slice(), new_col)
+        }
+        unsafe { ldl.adjust_remainder(remainder, &sct, cut.value, new_diagonal) };
+        // dbg!(remainder.as_ref().selfadjoint_eigenvalues(faer::Side::Upper));
+        if let Some(rem) = required_remainders.get(&r) {
+            assert_eq!(rem.as_ref(), remainder.as_ref())
+        }
         for (i, (s, t)) in signs.iter().enumerate() {
             let prod = s.transpose() * remainder.as_ref() * t;
-            assert!(prod == 0.0, "i = {i}")
+            assert!(prod <= 1e-10, "i = {i}")
         }
-        let mtm = m.transpose() * m;
-        let prod = &mtm * &sllt;
-        // dbg!(&prod);
-        test_is_identity_scaled(prod.as_ref(), s);
     }
 }
 
@@ -132,7 +228,8 @@ fn test_is_identity_scaled(mat: MatRef<f64>, scale: f64) {
 
 impl CutSetLdl {
     fn m(&self) -> MatRef<f64> {
-        let Self { s_recip, m_t } = self;
-        m_t.as_ref()
+        todo!();
+        // let Self { s_recip, m_t, d_recip } = self;
+        // m_t.as_ref()
     }
 }

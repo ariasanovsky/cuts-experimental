@@ -1,4 +1,4 @@
-use faer::{MatMut, MatRef};
+use faer::{Mat, MatMut, MatRef};
 
 #[derive(Clone)]
 pub struct FlatMat {
@@ -33,5 +33,10 @@ impl FlatMat {
 
     pub fn slice_mut(&mut self) -> &mut [f64] {
         &mut self.nums
+    }
+
+    pub fn to_faer(self) -> Mat<f64> {
+        // TODO! ?allocates
+        faer::mat::from_column_major_slice::<f64>(self.nums.as_slice(), self.nrows, self.ncols).to_owned()
     }
 }
