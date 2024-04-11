@@ -31,11 +31,11 @@ impl CutHelper {
     pub fn cut_mat(
         &mut self,
         remainder: MatMut<f64>,
-        approximat: MatMut<f64>,
+        // approximat: MatMut<f64>,
         rng: &mut impl rand::Rng,
         max_iterations: usize,
-        // parallelism: Parallelism,
-    ) -> (&Col<f64>, &Col<f64>, SignedCut) {
+        parallelism: faer::Parallelism,
+    ) -> SignedCut {
         let Self {
             t_signs,
             t_image,
@@ -63,7 +63,7 @@ impl CutHelper {
                 t_image.as_mut(),
                 s_signs.as_mut(),
                 &mut cut,
-                // parallelism,
+                parallelism,
             );
             if !improved_s {
                 break;
@@ -74,7 +74,7 @@ impl CutHelper {
                 s_image.as_mut(),
                 t_signs.as_mut(),
                 &mut cut,
-                // parallelism,
+                parallelism,
             );
             if !improved_input {
                 break;
@@ -93,20 +93,28 @@ impl CutHelper {
             t_signs.transpose().as_2d(), // rhs
             Some(1.0),                   // alpha
             -normalized_cut,             // beta
-            faer::Parallelism::None,     // parallelism
+            parallelism,     // parallelism
         );
         // approximat += cut_matrix;
         // `acc = alpha * acc + beta *     lhs *                 rhs`
         // `rem =   1.0 * rem + (-q) * s_signs * t_signs.transpose()`
-        matmul(
-            approximat,                  // acc
-            s_signs.as_ref().as_2d(),    // lhs
-            t_signs.transpose().as_2d(), // rhs
-            Some(1.0),                   // alpha
-            normalized_cut,              // beta
-            faer::Parallelism::None,     // parallelism
-        );
-        (s_signs, t_signs, cut)
+        // matmul(
+        //     approximat,                  // acc
+        //     s_signs.as_ref().as_2d(),    // lhs
+        //     t_signs.transpose().as_2d(), // rhs
+        //     Some(1.0),                   // alpha
+        //     normalized_cut,              // beta
+        //     faer::Parallelism::None,     // parallelism
+        // );
+        cut
+    }
+
+    pub fn s_signs(&self) -> &Col<f64> {
+        &self.s_signs
+    }
+
+    pub fn t_signs(&self) -> &Col<f64> {
+        &self.t_signs
     }
 }
 
@@ -116,7 +124,7 @@ pub(crate) fn improve_s(
     mut t_image: ColMut<f64>,
     mut s_signs: ColMut<f64>,
     cut: &mut SignedCut,
-    // parallelism: Parallelism,
+    parallelism: faer::Parallelism,
 ) -> bool {
     matmul(
         t_image.rb_mut().as_2d_mut(),
@@ -124,7 +132,7 @@ pub(crate) fn improve_s(
         t_signs.as_2d(),
         None,
         1.0,
-        faer::Parallelism::None, // parallelism,
+        parallelism,
     );
     let new_cut = t_image.norm_l1();
     if new_cut <= cut.value {
@@ -152,7 +160,7 @@ pub(crate) fn improve_t(
     mut s_image: ColMut<f64>,
     mut t_signs: ColMut<f64>,
     test_cut: &mut SignedCut,
-    // parallelism: Parallelism,
+    parallelism: faer::Parallelism,
 ) -> bool {
     matmul(
         s_image.rb_mut().as_2d_mut(),
@@ -160,7 +168,7 @@ pub(crate) fn improve_t(
         s_signs.as_2d(),
         None,
         1.0,
-        faer::Parallelism::None, // parallelism,
+        parallelism,
     );
     let new_cut = s_image.norm_l1();
     if new_cut <= test_cut.value {

@@ -63,7 +63,7 @@ pub(crate) fn cache_parameters_avx2(m: usize, n: usize, k: usize) -> CacheParams
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Layout {
     RowMajor,
-    ColMajor,
+    _ColMajor,
 }
 
 #[cfg(feature = "nightly")]

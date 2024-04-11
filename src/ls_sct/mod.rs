@@ -1,5 +1,5 @@
 use dyn_stack::ReborrowMut;
-use faer::{linalg::zip::MatShape, mat::{As2D, As2DMut, AsMatRef}, reborrow::Reborrow, Col, ColMut, Mat, MatRef};
+use faer::{mat::As2D, reborrow::Reborrow, Col, Mat, MatRef};
 
 use crate::{
     bit_magic::{cache_parameters_avx2, lazy_matmul_avx2},
@@ -17,6 +17,10 @@ pub struct CutSetLdl {
     // `M^T` where `M = L^{-1}` and `X^TX = s * LL^T` (ldl w/ `D = s * I`)
     pub(crate) m_t: Mat<f64>,
     pub(crate) d_recip: Col<f64>,
+    // biggest_entry: f64,
+    // smallest_entry: f64,
+    // biggest_diag: f64,
+    // smallest_diag: f64,
 }
 
 pub struct LdlCut {
@@ -28,7 +32,15 @@ impl CutSetLdl {
         let s = (nrows * ncols) as f64;
         let m_t = Mat::with_capacity(rank, rank);
         let d_recip = Col::zeros(rank);
-        Self { s, m_t, d_recip }
+        Self {
+            s,
+            m_t,
+            d_recip,
+            // biggest_entry: 0.0,
+            // smallest_entry: f64::MAX,
+            // biggest_diag: 0.0,
+            // smallest_diag: f64::MAX,
+         }
     }
 
     pub fn add_column(
@@ -85,6 +97,14 @@ impl CutSetLdl {
         let d = s - d;
         let d = d.recip();
         self.d_recip.write(old_rank, d);
+        // if d.abs() < self.smallest_diag.abs() {
+        //     self.smallest_diag = d;
+        //     dbg!(self.m_t.nrows(), d);
+        // }
+        // if d.abs() > self.biggest_diag.abs() {
+        //     self.biggest_diag = d;
+        //     dbg!(self.m_t.nrows(), d);
+        // }
         d
     }
 
@@ -105,6 +125,16 @@ impl CutSetLdl {
             -1.0,
             faer::Parallelism::None,
         );
+        // for &m in self.m_t.col_as_slice(old_rank) {
+        //     if m.abs() < self.smallest_entry.abs() {
+        //         self.smallest_entry = m;
+        //         dbg!(self.m_t.nrows(), m);
+        //     }
+        //     if m.abs() > self.biggest_entry.abs() {
+        //         self.biggest_entry = m;
+        //         dbg!(self.m_t.nrows(), m);
+        //     }
+        // }
     }
 
     pub(crate) unsafe fn adjust_remainder(
@@ -270,7 +300,7 @@ impl CutSetBuffers {
                 t_image.as_mut(),
                 s_signs.as_mut(),
                 &mut cut,
-                // parallelism,
+                faer::Parallelism::None,
             );
             if !improved_s {
                 break;
@@ -281,7 +311,7 @@ impl CutSetBuffers {
                 s_image.as_mut(),
                 t_signs.as_mut(),
                 &mut cut,
-                // parallelism,
+                faer::Parallelism::None,
             );
             if !improved_input {
                 break;

@@ -99,17 +99,18 @@ impl Sct {
     }
 
     pub fn s(&self) -> &[u8] {
-        todo!();
-        // self.s.as_slice()
+        &self.s[..self.current_rank * self.dims.num_s_bytes()]
     }
 
     pub fn t(&self) -> &[u8] {
-        todo!();
+        &self.t[..self.current_rank * self.dims.num_t_bytes()]
+        // todo!();
         // self.t.as_slice()
     }
 
     pub fn c(&self) -> &[f64] {
-        todo!();
+        &self.c[..self.current_rank]
+        // todo!();
         // self.c.as_slice()
     }
 
