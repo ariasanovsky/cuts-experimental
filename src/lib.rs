@@ -12,4 +12,5 @@ pub mod sct;
 pub mod sct_helper;
 #[cfg(feature = "old_stuff_that_didnt_work")]
 pub mod sct_old;
+pub mod sparse_cut;
 pub mod tensorboard;
