@@ -84,7 +84,9 @@ impl CutHelper {
             }
         }
 
-        let normalization = remainder.nrows() * remainder.ncols();
+        let s_cardinality = cut.s_sizes.0 + cut.s_sizes.1;
+        let t_cardinality = cut.t_sizes.0 + cut.t_sizes.1;
+        let normalization = s_cardinality * t_cardinality;
         let normalized_cut = cut.value / normalization as f64;
         // let cut_matrix = scale(normalized_cut) * s_signs.as_ref() * t_signs.transpose();
         // remainder -= &cut_matrix;
