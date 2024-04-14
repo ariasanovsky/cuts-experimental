@@ -25,15 +25,36 @@ pub enum Sign {
 }
 
 impl SparseSct {
-    pub fn new(nrows: usize, ncols: usize, max_u16s: usize) -> Self {
+    pub fn new(rank: usize) -> Self {
         Self {
-            s: Vec::with_capacity(max_u16s),
-            t: Vec::with_capacity(max_u16s),
-            c: Vec::with_capacity(max_u16s),
+            s: Vec::with_capacity(rank),
+            t: Vec::with_capacity(rank),
+            c: Vec::with_capacity(rank),
         }
     }
 
     pub fn extend_with(&mut self, s_signs: &Col<f64>, t_signs: &Col<f64>, cut: f64) {
-        todo!()
+        let Self {
+            s,
+            t,
+            c,
+        } = self;
+        let s_signs = s_signs.as_slice().iter().enumerate().filter_map(|(i, s)| {
+            match s.partial_cmp(&0.0).unwrap() {
+                std::cmp::Ordering::Less => Some((i, Sign::Negative)),
+                std::cmp::Ordering::Equal => None,
+                std::cmp::Ordering::Greater => Some((i, Sign::Positive)),
+            }
+        }).collect();
+        s.push(s_signs);
+        let t_signs = t_signs.as_slice().iter().enumerate().filter_map(|(i, t)| {
+            match t.partial_cmp(&0.0).unwrap() {
+                std::cmp::Ordering::Less => Some((i, Sign::Negative)),
+                std::cmp::Ordering::Equal => None,
+                std::cmp::Ordering::Greater => Some((i, Sign::Positive)),
+            }
+        }).collect();
+        t.push(t_signs);
+        c.push(cut);
     }
 }

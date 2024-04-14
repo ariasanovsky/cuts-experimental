@@ -12,10 +12,10 @@ pub struct SignedCut {
 }
 
 pub struct CutHelper {
-    t_signs: Col<f64>,
-    t_image: Col<f64>,
-    s_signs: Col<f64>,
-    s_image: Col<f64>,
+    pub(crate) t_signs: Col<f64>,
+    pub(crate) t_image: Col<f64>,
+    pub(crate) s_signs: Col<f64>,
+    pub(crate) s_image: Col<f64>,
 }
 
 impl CutHelper {
@@ -51,6 +51,7 @@ impl CutHelper {
                 -1.0
             }
         });
+        // TODO! these are backwards
         let mut cut = SignedCut {
             s_sizes: (s_pos, t_signs.nrows() - s_pos),
             t_sizes: (0, 0),
