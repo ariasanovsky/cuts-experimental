@@ -7,6 +7,7 @@ edition = "2021"
 
 [features]
 experimenting_with_safetensors_view = []
+experimenting_with_sparse = []
 
 [dependencies]
 memmap2 = "0.9.4"

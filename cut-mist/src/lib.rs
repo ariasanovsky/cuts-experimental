@@ -4,6 +4,7 @@ pub mod safetensors;
 #[cfg(feature = "experimenting_with_safetensors_view")]
 pub mod safetensors_view;
 pub mod sct_map;
+#[cfg(feature = "experimenting_with_sparse")]
 pub mod sparse_safetensors;
 
 pub fn half_point<F>(nrows: usize, ncols: usize) -> usize {

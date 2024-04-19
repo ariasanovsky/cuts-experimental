@@ -9,7 +9,7 @@ use linya::{Bar, Progress};
 
 use hira::{
     faer::flat_mat,
-    hira_helpers::{HiraLogger, SparseHiraLogger},
+    hira_helpers::SparseHiraLogger,
     safetensors::{serialize_mats, SerializeSct},
     sct_map::SafeTensorsDirectoryMap,
 };
