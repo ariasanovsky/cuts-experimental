@@ -6,7 +6,7 @@ use rand::thread_rng;
 use std::time::SystemTime;
 use tensorboard_writer::TensorboardWriter;
 
-use hira::{
+use cut_mist::{
     faer::flat_mat,
     hira_helpers::{HiraLogger, HiraParameters},
     safetensors::{bits_to_signs, serialize_mats, serialize_sct},

@@ -401,6 +401,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f1871a911a2b9a3f66a285896a719159985683bf9903aa2cf89e0c9f53e14552"
 
 [[package]]
+name = "cut-mist"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "candle-core",
+ "chrono",
+ "clap",
+ "cuts",
+ "eyre",
+ "faer",
+ "half",
+ "linya",
+ "memmap2",
+ "rand",
+ "rayon",
+ "safetensors",
+ "tensorboard-writer",
+]
+
+[[package]]
 name = "cuts"
 version = "0.1.0"
 dependencies = [
@@ -1039,26 +1059,6 @@ name = "hermit-abi"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d231dfb89cfffdbc30e7fc41579ed6066ad03abda9e567ccafae602b97ec5024"
-
-[[package]]
-name = "hira"
-version = "0.1.0"
-dependencies = [
- "bytemuck",
- "candle-core",
- "chrono",
- "clap",
- "cuts",
- "eyre",
- "faer",
- "half",
- "linya",
- "memmap2",
- "rand",
- "rayon",
- "safetensors",
- "tensorboard-writer",
-]
 
 [[package]]
 name = "hostname"

@@ -6,7 +6,7 @@ use cuts::{
     sct_helper::Sct,
 };
 
-use hira::{
+use cut_mist::{
     faer::flat_mat,
     half_point,
     hira_helpers::{HiraParameters, LdlHiraLogger},

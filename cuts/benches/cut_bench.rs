@@ -9,7 +9,7 @@ mod mat_tmat {
         vec![[4096; 3]]
     }
 
-    pub fn bitmul_avx2(bencher: Bencher, [m, n, k]: [usize; 3]) {
+    pub fn bit_mat_tmat_avx2(bencher: Bencher, [m, n, k]: [usize; 3]) {
         let a = avec![1u8; m * k / 8];
         let b = avec![1u8; k * n / 8];
         let diag = avec![1.0; k];
@@ -38,7 +38,7 @@ mod mat_tmat {
         })
     }
 
-    pub fn bitmul_avx512(bencher: Bencher, [m, n, k]: [usize; 3]) {
+    pub fn bit_mat_tmat_avx512(bencher: Bencher, [m, n, k]: [usize; 3]) {
         if pulp::x86::V4::try_new().is_none() {
             return;
         }
@@ -66,10 +66,11 @@ mod mat_tmat {
         })
     }
 
-    pub fn gemm(bencher: Bencher, [m, n, k]: [usize; 3]) {
-        let a = avec![1.0; m * k];
-        let b = avec![1.0; k * n];
-        let mut c = avec![1.0; m * n];
+    pub fn gemm_mat_tmat<T: From<f32> + Copy + 'static>(bencher: Bencher, [m, n, k]: [usize; 3]) {
+        let one: T = T::from(1.0);
+        let a = avec![one; m * k];
+        let b = avec![one; k * n];
+        let mut c = avec![one; m * n];
         let mut ad = a.clone();
 
         bencher.bench(|| unsafe {
@@ -88,8 +89,8 @@ mod mat_tmat {
                 b.as_ptr(),
                 1,
                 n as _,
-                1.0,
-                1.0,
+                one,
+                one,
                 false,
                 false,
                 false,
@@ -105,7 +106,7 @@ mod matvec {
         vec![[4096; 2], [4096, 16384]]
     }
 
-    pub fn bitmul_avx2(bencher: Bencher, [m, n]: [usize; 2]) {
+    pub fn bit_matvec_avx2(bencher: Bencher, [m, n]: [usize; 2]) {
         let a = avec![1u8; m * n / 8];
         let b = avec![1.0; n];
         let mut c = avec![1.0; m];
@@ -113,7 +114,7 @@ mod matvec {
         bencher.bench(|| matvec_avx2(m, n, &mut c, &a, &b))
     }
 
-    pub fn bitmul_avx512(bencher: Bencher, [m, n]: [usize; 2]) {
+    pub fn bit_matvec_avx512(bencher: Bencher, [m, n]: [usize; 2]) {
         if pulp::x86::V4::try_new().is_none() {
             return;
         }
@@ -124,10 +125,11 @@ mod matvec {
         bencher.bench(|| matvec_avx512(m, n, &mut c, &a, &b))
     }
 
-    pub fn gemm(bencher: Bencher, [m, n]: [usize; 2]) {
-        let a = avec![1.0; m * n];
-        let b = avec![1.0; n];
-        let mut c = avec![1.0; m];
+    pub fn gemm_matvec<T: From<f32> + Copy + 'static>(bencher: Bencher, [m, n]: [usize; 2]) {
+        let one = T::from(1.0);
+        let a = avec![one; m * n];
+        let b = avec![one; n];
+        let mut c = avec![one; m];
 
         bencher.bench(|| unsafe {
             gemm::gemm(
@@ -144,8 +146,8 @@ mod matvec {
                 b.as_ptr(),
                 n as _,
                 1,
-                1.0,
-                1.0,
+                one,
+                one,
                 false,
                 false,
                 false,
@@ -161,7 +163,7 @@ mod tmatvec {
         vec![[4096; 2], [4096, 16384]]
     }
 
-    pub fn bitmul_avx2(bencher: Bencher, [m, n]: [usize; 2]) {
+    pub fn bit_tmatvec_avx2(bencher: Bencher, [m, n]: [usize; 2]) {
         let a = avec![1u8; m * n / 8];
         let b = avec![1.0; m];
         let mut c = avec![1.0; n];
@@ -169,7 +171,7 @@ mod tmatvec {
         bencher.bench(|| tmatvec_avx2(m, n, &mut c, &a, &b))
     }
 
-    pub fn bitmul_avx512(bencher: Bencher, [m, n]: [usize; 2]) {
+    pub fn bit_tmatvec_avx512(bencher: Bencher, [m, n]: [usize; 2]) {
         if pulp::x86::V4::try_new().is_none() {
             return;
         }
@@ -180,10 +182,11 @@ mod tmatvec {
         bencher.bench(|| tmatvec_avx512(m, n, &mut c, &a, &b))
     }
 
-    pub fn gemm(bencher: Bencher, [m, n]: [usize; 2]) {
-        let a = avec![1.0; m * n];
-        let b = avec![1.0; n];
-        let mut c = avec![1.0; m];
+    pub fn gemm_tmatvec<T: From<f32> + Copy + 'static>(bencher: Bencher, [m, n]: [usize; 2]) {
+        let one = T::from(1.0);
+        let a = avec![one; m * n];
+        let b = avec![one; n];
+        let mut c = avec![one; m];
 
         bencher.bench(|| unsafe {
             gemm::gemm(
@@ -200,8 +203,8 @@ mod tmatvec {
                 b.as_ptr(),
                 n as _,
                 1,
-                1.0,
-                1.0,
+                one,
+                one,
                 false,
                 false,
                 false,
@@ -213,11 +216,14 @@ mod tmatvec {
 
 mod sctvec {
     use super::*;
-    pub fn params() -> Vec<[usize; 3]> {
-        (1..17).map(|k| k * 1024).map(|k| [4096, 4096, k]).collect()
+    pub fn params() -> Vec<PlotArg> {
+        (1..17).map(|k| k * 1024).map(PlotArg).collect()
     }
 
-    pub fn bitmul_avx2(bencher: Bencher, [m, n, k]: [usize; 3]) {
+    pub fn bit_sctvec_avx2(bencher: Bencher, PlotArg(k): PlotArg) {
+        let m = 4096;
+        let n = 4096;
+        
         let s = avec![1u8; m * k / 8];
         let t = avec![1u8; k * n / 8];
         let c = avec![1.0; k];
@@ -237,7 +243,9 @@ mod sctvec {
         })
     }
 
-    pub fn bitmul_avx512(bencher: Bencher, [m, n, k]: [usize; 3]) {
+    pub fn bit_sctvec_avx512(bencher: Bencher, PlotArg(k): PlotArg) {
+        let m = 4096;
+        let n = 4096;
         if pulp::x86::V4::try_new().is_none() {
             return;
         }
@@ -260,10 +268,13 @@ mod sctvec {
         })
     }
 
-    pub fn gemm(bencher: Bencher, [m, n, _]: [usize; 3]) {
-        let a = avec![1.0; m * n];
-        let x = avec![1.0; n];
-        let mut z = avec![1.0; m];
+    pub fn gemm_sctvec<T: From<f32> + Copy + 'static>(bencher: Bencher, _: PlotArg) {
+        let one = T::from(1.0);
+        let m = 4096;
+        let n = 4096;
+        let a = avec![one; m * n];
+        let x = avec![one; n];
+        let mut z = avec![one; m];
 
         bencher.bench(|| unsafe {
             gemm::gemm(
@@ -280,8 +291,8 @@ mod sctvec {
                 x.as_ptr(),
                 n as _,
                 1,
-                1.0,
-                1.0,
+                one,
+                one,
                 false,
                 false,
                 false,
@@ -292,36 +303,43 @@ mod sctvec {
 }
 
 fn main() {
-    let mut config = BenchConfig::from_args();
-    let mut bench = Bench::new(config.clone());
+    let config = BenchConfig::from_args();
+    let mut bench = Bench::new(config);
     bench.register_many(
         list![
-            mat_tmat::bitmul_avx2,
-            mat_tmat::bitmul_avx512,
-            mat_tmat::gemm
+            mat_tmat::bit_mat_tmat_avx2,
+            mat_tmat::bit_mat_tmat_avx512,
+            mat_tmat::gemm_mat_tmat::<f32>,
+            mat_tmat::gemm_mat_tmat::<f64>,
         ],
         mat_tmat::params(),
     );
-    bench.run();
-
-    let mut bench = Bench::new(config.clone());
     bench.register_many(
-        list![matvec::bitmul_avx2, matvec::bitmul_avx512, matvec::gemm],
+        list![
+            matvec::bit_matvec_avx2,
+            matvec::bit_matvec_avx512,
+            matvec::gemm_matvec::<f32>,
+            matvec::gemm_matvec::<f64>,
+        ],
         matvec::params(),
     );
-    bench.run();
-
-    let mut bench = Bench::new(config.clone());
     bench.register_many(
-        list![tmatvec::bitmul_avx2, tmatvec::bitmul_avx512, tmatvec::gemm],
+        list![
+            tmatvec::bit_tmatvec_avx2,
+            tmatvec::bit_tmatvec_avx512,
+            tmatvec::gemm_tmatvec::<f32>,
+            tmatvec::gemm_tmatvec::<f64>,
+        ],
         tmatvec::params(),
     );
-    bench.run();
-
-    let mut bench = Bench::new(config.clone());
     bench.register_many(
-        list![sctvec::bitmul_avx2, sctvec::bitmul_avx512, sctvec::gemm],
+        list![
+            sctvec::bit_sctvec_avx2,
+            sctvec::bit_sctvec_avx512,
+            sctvec::gemm_sctvec::<f32>,
+            sctvec::gemm_sctvec::<f64>,
+        ],
         sctvec::params(),
     );
-    bench.run();
+    bench.run().unwrap();
 }

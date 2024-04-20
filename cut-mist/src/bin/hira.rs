@@ -7,7 +7,7 @@ use tensorboard_writer::TensorboardWriter;
 use std::sync::Mutex;
 use linya::{Bar, Progress};
 
-use hira::{
+use cut_mist::{
     faer::flat_mat,
     half_point,
     hira_helpers::{HiraLogger, HiraParameters},

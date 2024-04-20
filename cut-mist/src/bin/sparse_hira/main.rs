@@ -7,17 +7,18 @@ use tensorboard_writer::TensorboardWriter;
 use std::sync::Mutex;
 use linya::{Bar, Progress};
 
-use hira::{
+use cut_mist::{
     faer::flat_mat,
     hira_helpers::SparseHiraLogger,
-    safetensors::{serialize_mats, SerializeSct},
+    safetensors::serialize_mats,
     sct_map::SafeTensorsDirectoryMap,
 };
+use cut_mist::safetensors::SerializeSct;
 
 #[derive(Debug, Parser)]
-#[command(name = "HIRA")]
+#[command(name = "Sparse HIRA")]
 // #[command(version = "0.1.0")]
-#[command(about = "Approximates safetensors with cutsets approximation", long_about = None)]
+#[command(about = "Approximates safetensors with sparse sct", long_about = None)]
 struct Args {
     /// Input directory containing `safetensors`
     #[arg(short = 't')]

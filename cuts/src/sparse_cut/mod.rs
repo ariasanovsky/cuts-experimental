@@ -1,7 +1,7 @@
 use dyn_stack::ReborrowMut;
 use faer::{linalg::matmul::matmul, reborrow::Reborrow, ColMut, ColRef, MatMut, MatRef};
 
-use crate::inplace_sct_signed::{CutHelper, SignedCut};
+use crate::inplace_sct_signed::CutHelper;
 
 pub mod helpers;
 

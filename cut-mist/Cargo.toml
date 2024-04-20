@@ -1,5 +1,5 @@
 [package]
-name = "hira"
+name = "cut-mist"
 version = "0.1.0"
 edition = "2021"
 
@@ -42,3 +42,6 @@ name = "ls_hira"
 
 [[bin]]
 name = "test_mat"
+
+[[bin]]
+name = "mat_experiments"
