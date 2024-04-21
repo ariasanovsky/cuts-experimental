@@ -54,8 +54,8 @@ fn main() -> eyre::Result<()> {
     }.sample(&mut rand::thread_rng());
     let remainder_f32 = Mat::from_fn(dim, dim, |row, col| {
         let a = unitary[(row, col)];
-        let b = half::bf16::from_f64(a);
-        a - b.to_f64()
+        let b = a as f32;
+        a - b as f64
     }).norm_l2();
     let mut writer = TensorboardWriter::new(out_dir.join("remainder_f32").join(&time))?;
     writer.write_file_version()?;
