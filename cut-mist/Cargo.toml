@@ -8,6 +8,7 @@ edition = "2021"
 [features]
 experimenting_with_safetensors_view = []
 experimenting_with_sparse = []
+nightly = ["cuts/nightly"]
 
 [dependencies]
 memmap2 = "0.9.4"
@@ -45,3 +46,6 @@ name = "test_mat"
 
 [[bin]]
 name = "mat_experiments"
+
+[[bin]]
+name = "mat_exp"
