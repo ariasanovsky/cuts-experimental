@@ -8,7 +8,7 @@ edition = "2021"
 [features]
 dfdx_layer = ["dfdx"]
 old_stuff_that_didnt_work = []
-nightly = ["pulp/nightly"]
+nightly = ["pulp/nightly", "faer/nightly"]
 
 [dependencies]
 aligned-vec = "0.5.0"

@@ -1,7 +1,11 @@
+#![allow(non_snake_case)]
 use clap::Parser;
 use cut_mist::hira_helpers::HiraParameters;
 use cuts::inplace_sct_signed::CutHelperV2;
-use faer::Mat;
+use faer::dyn_stack::{GlobalPodBuffer, PodStack, StackReq};
+use faer::linalg::{matmul, temp_mat_req};
+use faer::reborrow::*;
+use faer::{Col, Mat};
 use rand::distributions::Distribution;
 use rand::prelude::*;
 
@@ -12,6 +16,9 @@ use rand::prelude::*;
 struct Args {
     #[arg(short = 'd')]
     dim: usize,
+    /// The decomposition block size (default: 32)
+    #[arg(short = 'b')]
+    blocksize: Option<usize>,
     /// The number of iterations (default: 40)
     #[arg(short = 'i')]
     iters: Option<usize>,
@@ -24,6 +31,7 @@ fn main() -> eyre::Result<()> {
     let args = Args::try_parse()?;
     let Args {
         dim: max_dim,
+        blocksize,
         iters,
         par,
     } = args;
@@ -33,6 +41,7 @@ fn main() -> eyre::Result<()> {
         parallelism: par.map_or(faer::Parallelism::None, |par| faer::Parallelism::Rayon(par)),
     };
 
+    let blocksize = blocksize.unwrap_or(32);
     let mut dim = 0usize;
     let incr = max_dim;
     // let incr = 64;
@@ -43,34 +52,76 @@ fn main() -> eyre::Result<()> {
         let nrows = dim;
         let ncols = dim;
         // let mut remainder: Mat<f64> = faer::stats::UnitaryMat { dimension: dim }.sample(rng);
-        let mut remainder: Mat<f64> = faer::stats::StandardNormalMat { nrows, ncols }.sample(rng);
-        let mut remainder_transposed = remainder.transpose().to_owned();
-        let init_norm = remainder.squared_norm_l2();
+        let mat: Mat<f64> = faer::stats::UnitaryMat { dimension: dim }.sample(rng);
+        let init_norm = mat.squared_norm_l2();
         let remainder_bf16 = Mat::from_fn(nrows, ncols, |row, col| {
-            let a = remainder[(row, col)];
+            let a = mat[(row, col)];
             let b = half::bf16::from_f64(a);
             a - b.to_f64()
         })
         .squared_norm_l2();
 
-        let mut cut_helper = CutHelperV2::new(remainder.as_ref());
+        let mut cut_helper = CutHelperV2::new(mat.as_ref());
+        let mut two_remainder = faer::scale(2.0) * &mat;
+        let mut two_remainder_transposed = two_remainder.transpose().to_owned();
 
-        let mut cur_norm = init_norm;
+        let mut remainder_norm = init_norm;
         let mut iter = 0;
 
         let instant = std::time::Instant::now();
         let mut finished = false;
+
+        let mut S = Mat::<f64>::zeros(mat.nrows(), blocksize);
+        let mut T = Mat::<f64>::zeros(mat.ncols(), blocksize);
+        let mut C = Col::<f64>::zeros(blocksize);
+        let mut how_full = 0usize;
+        let mut mem = GlobalPodBuffer::new(
+            StackReq::new::<u64>(Ord::max(nrows, ncols))
+                .and(temp_mat_req::<f64>(blocksize, 1).unwrap()),
+        );
+        let mut stack = PodStack::new(&mut mem);
         while iter < parameters.rank {
+            if how_full == blocksize {
+                let tmp = &S * C.as_ref().column_vector_as_diagonal();
+                matmul::matmul(
+                    two_remainder.as_mut(), // acc
+                    tmp.as_ref(),           // lhs
+                    T.transpose(),          // rhs
+                    Some(1.0),              // alpha
+                    2.0,                    // beta
+                    parameters.parallelism, // parallelism
+                );
+                two_remainder_transposed
+                    .as_mut()
+                    .copy_from(two_remainder.transpose());
+                how_full = 0;
+            }
+
+            how_full += 1;
             let cut = cut_helper.cut_mat(
-                remainder.as_mut(),
-                remainder_transposed.as_mut(),
+                two_remainder.as_ref(),
+                two_remainder_transposed.as_ref(),
+                S.as_mut().get_mut(.., ..how_full),
+                C.as_mut().get_mut(..how_full),
+                T.as_mut().get_mut(.., ..how_full),
                 rng,
                 parameters.max_iters,
                 parameters.parallelism,
+                stack.rb_mut(),
             );
 
-            cur_norm -= (cut * cut) / (nrows * ncols) as f64;
-            if cur_norm <= remainder_bf16 {
+            remainder_norm -= (cut * cut) / (nrows * ncols) as f64;
+            if remainder_norm <= remainder_bf16 {
+                let tmp = S.get(.., ..how_full) * C.get(..how_full).column_vector_as_diagonal();
+                matmul::matmul(
+                    two_remainder.as_mut(),            // acc
+                    tmp.as_ref(),                      // lhs
+                    T.get(.., ..how_full).transpose(), // rhs
+                    Some(1.0),                         // alpha
+                    2.0,                               // beta
+                    parameters.parallelism,            // parallelism
+                );
+                two_remainder_transposed.as_mut().copy_from(mat.transpose());
                 finished = true;
                 break;
             }

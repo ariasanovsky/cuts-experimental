@@ -1,3 +1,4 @@
+#![allow(non_snake_case)]
 pub mod faer;
 pub mod hira_helpers;
 pub mod safetensors;
