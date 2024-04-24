@@ -1,9 +1,11 @@
 #![allow(non_snake_case)]
 use clap::Parser;
 use cut_mist::hira_helpers::HiraParameters;
+use cuts::bit_magic;
 use cuts::inplace_sct_signed::CutHelperV2;
+use equator::assert;
 use faer::dyn_stack::{GlobalPodBuffer, PodStack, StackReq};
-use faer::linalg::{matmul, temp_mat_req};
+use faer::linalg::temp_mat_req;
 use faer::reborrow::*;
 use faer::{Col, Mat};
 use rand::distributions::Distribution;
@@ -52,7 +54,7 @@ fn main() -> eyre::Result<()> {
         let nrows = dim;
         let ncols = dim;
         // let mut remainder: Mat<f64> = faer::stats::UnitaryMat { dimension: dim }.sample(rng);
-        let mat: Mat<f64> = faer::stats::UnitaryMat { dimension: dim }.sample(rng);
+        let mat: Mat<f64> = faer::stats::StandardNormalMat { nrows, ncols }.sample(rng);
         let init_norm = mat.squared_norm_l2();
         let remainder_bf16 = Mat::from_fn(nrows, ncols, |row, col| {
             let a = mat[(row, col)];
@@ -61,9 +63,10 @@ fn main() -> eyre::Result<()> {
         })
         .squared_norm_l2();
 
-        let mut cut_helper = CutHelperV2::new(mat.as_ref());
         let mut two_remainder = faer::scale(2.0) * &mat;
         let mut two_remainder_transposed = two_remainder.transpose().to_owned();
+        let mut cut_helper =
+            CutHelperV2::new(two_remainder.as_ref(), two_remainder_transposed.as_ref());
 
         let mut remainder_norm = init_norm;
         let mut iter = 0;
@@ -71,8 +74,8 @@ fn main() -> eyre::Result<()> {
         let instant = std::time::Instant::now();
         let mut finished = false;
 
-        let mut S = Mat::<f64>::zeros(mat.nrows(), blocksize);
-        let mut T = Mat::<f64>::zeros(mat.ncols(), blocksize);
+        let mut S = vec![0u8; nrows / 8 * blocksize].into_boxed_slice();
+        let mut T = vec![0u8; ncols / 8 * blocksize].into_boxed_slice();
         let mut C = Col::<f64>::zeros(blocksize);
         let mut how_full = 0usize;
         let mut mem = GlobalPodBuffer::new(
@@ -80,17 +83,36 @@ fn main() -> eyre::Result<()> {
                 .and(temp_mat_req::<f64>(blocksize, 1).unwrap()),
         );
         let mut stack = PodStack::new(&mut mem);
+        let cache_params = bit_magic::cache_parameters(nrows, ncols, blocksize);
         while iter < parameters.rank {
             if how_full == blocksize {
-                let tmp = &S * C.as_ref().column_vector_as_diagonal();
-                matmul::matmul(
-                    two_remainder.as_mut(), // acc
-                    tmp.as_ref(),           // lhs
-                    T.transpose(),          // rhs
-                    Some(1.0),              // alpha
-                    2.0,                    // beta
-                    parameters.parallelism, // parallelism
-                );
+                {
+                    assert!(two_remainder.nrows() == two_remainder.row_capacity());
+                    let two_remainder = unsafe {
+                        std::slice::from_raw_parts_mut(two_remainder.as_ptr_mut(), nrows * ncols)
+                    };
+                    bit_magic::matmul(
+                        cache_params,
+                        nrows,
+                        ncols,
+                        blocksize,
+                        two_remainder,
+                        &S,
+                        C.as_slice(),
+                        &T,
+                        bit_magic::Layout::RowMajor,
+                        stack.rb_mut(),
+                    );
+                }
+                // let tmp = &S * C.as_ref().column_vector_as_diagonal();
+                // matmul::matmul(
+                //     two_remainder.as_mut(), // acc
+                //     tmp.as_ref(),           // lhs
+                //     T.transpose(),          // rhs
+                //     Some(1.0),              // alpha
+                //     2.0,                    // beta
+                //     parameters.parallelism, // parallelism
+                // );
                 two_remainder_transposed
                     .as_mut()
                     .copy_from(two_remainder.transpose());
@@ -101,9 +123,9 @@ fn main() -> eyre::Result<()> {
             let cut = cut_helper.cut_mat(
                 two_remainder.as_ref(),
                 two_remainder_transposed.as_ref(),
-                S.as_mut().get_mut(.., ..how_full),
-                C.as_mut().get_mut(..how_full),
-                T.as_mut().get_mut(.., ..how_full),
+                &mut S[..nrows / 8 * how_full],
+                C.get_mut(..how_full),
+                &mut T[..ncols / 8 * how_full],
                 rng,
                 parameters.max_iters,
                 parameters.parallelism,
@@ -112,16 +134,16 @@ fn main() -> eyre::Result<()> {
 
             remainder_norm -= (cut * cut) / (nrows * ncols) as f64;
             if remainder_norm <= remainder_bf16 {
-                let tmp = S.get(.., ..how_full) * C.get(..how_full).column_vector_as_diagonal();
-                matmul::matmul(
-                    two_remainder.as_mut(),            // acc
-                    tmp.as_ref(),                      // lhs
-                    T.get(.., ..how_full).transpose(), // rhs
-                    Some(1.0),                         // alpha
-                    2.0,                               // beta
-                    parameters.parallelism,            // parallelism
-                );
-                two_remainder_transposed.as_mut().copy_from(mat.transpose());
+                // let tmp = S.get(.., ..how_full) * C.get(..how_full).column_vector_as_diagonal();
+                // matmul::matmul(
+                //     two_remainder.as_mut(),            // acc
+                //     tmp.as_ref(),                      // lhs
+                //     T.get(.., ..how_full).transpose(), // rhs
+                //     Some(1.0),                         // alpha
+                //     2.0,                               // beta
+                //     parameters.parallelism,            // parallelism
+                // );
+                // two_remainder_transposed.as_mut().copy_from(mat.transpose());
                 finished = true;
                 break;
             }

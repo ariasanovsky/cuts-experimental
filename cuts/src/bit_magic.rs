@@ -32,13 +32,10 @@ use std::iter::zip;
 use aligned_vec::CACHELINE_ALIGN;
 use dyn_stack::PodStack;
 use equator::{assert, debug_assert};
+use faer::MatRef;
 #[cfg(feature = "nightly")]
-use pulp::x86::V4;
-use pulp::{
-    b8, f64x4, f64x8, u64x4,
-    x86::V3,
-    Simd,
-};
+use pulp::{b8, f64x8, x86::V4};
+use pulp::{f64x4, u64x4, x86::V3, Simd};
 use reborrow::*;
 
 #[derive(Copy, Clone, Debug)]
@@ -82,8 +79,6 @@ pub unsafe fn lazy_kernel_32x8_avx512(
     rhs_row_stride: usize,
     diag: &[f64],
 ) {
-    debug_assert!(k % 4 == 0);
-
     let dst = dst.as_mut_ptr();
     let lhs = lhs.as_ptr();
     let rhs = rhs.as_ptr();
@@ -96,9 +91,10 @@ pub unsafe fn lazy_kernel_32x8_avx512(
     let pos_one = simd.splat_f64x8(1.0);
     let neg_one = simd.splat_f64x8(-1.0);
 
-    let mut depth = k / 4;
-    while depth > 0 {
-        depth -= 1;
+    let mut count = k / 4;
+    while count > 0 {
+        let depth = k / 4 - count;
+        count -= 1;
 
         seq_macro::seq! { DEPTH_INNER in 0..4 {{
             let depth_inner = DEPTH_INNER;
@@ -128,6 +124,39 @@ pub unsafe fn lazy_kernel_32x8_avx512(
                 acc[j][2] = simd.mul_add_f64x8(rhs, lhs2, acc[j][2]);
                 acc[j][3] = simd.mul_add_f64x8(rhs, lhs3, acc[j][3]);
             }}}
+        }}}
+    }
+    count = k % 4;
+
+    while count > 0 {
+        let depth = k - count;
+        count -= 1;
+
+        let d = simd.splat_f64x8(*diag.add(depth));
+
+        let lhs0 = *lhs.add((depth * lhs_col_stride) / 8 + 0);
+        let lhs1 = *lhs.add((depth * lhs_col_stride) / 8 + 1);
+        let lhs2 = *lhs.add((depth * lhs_col_stride) / 8 + 2);
+        let lhs3 = *lhs.add((depth * lhs_col_stride) / 8 + 3);
+        let all_rhs = *rhs.add((depth * rhs_row_stride) / 8);
+
+        let lhs0 = simd.select_f64x8(b8(lhs0), pos, neg);
+        let lhs1 = simd.select_f64x8(b8(lhs1), pos, neg);
+        let lhs2 = simd.select_f64x8(b8(lhs2), pos, neg);
+        let lhs3 = simd.select_f64x8(b8(lhs3), pos, neg);
+
+        let lhs0 = simd.xor_f64x8(lhs0, d);
+        let lhs1 = simd.xor_f64x8(lhs1, d);
+        let lhs2 = simd.xor_f64x8(lhs2, d);
+        let lhs3 = simd.xor_f64x8(lhs3, d);
+
+        seq_macro::seq! { J in 0..8 {{
+            let j = J;
+            let rhs = simd.select_f64x8(b8(((all_rhs >> j) & 1).wrapping_neg()), pos_one, neg_one);
+            acc[j][0] = simd.mul_add_f64x8(rhs, lhs0, acc[j][0]);
+            acc[j][1] = simd.mul_add_f64x8(rhs, lhs1, acc[j][1]);
+            acc[j][2] = simd.mul_add_f64x8(rhs, lhs2, acc[j][2]);
+            acc[j][3] = simd.mul_add_f64x8(rhs, lhs3, acc[j][3]);
         }}}
     }
 
@@ -1425,6 +1454,213 @@ pub fn tmatvec_avx2(m: usize, n: usize, dst: &mut [f64], lhs: &[u8], rhs: &[f64]
         lhs,
         rhs,
     });
+}
+
+#[cfg(feature = "nightly")]
+pub fn tmatvec_bit_avx512(
+    simd: V4,
+    m: usize,
+    n: usize,
+    dst: &mut [f64],
+    lhs: MatRef<'_, f64>,
+    rhs: &[u8],
+) {
+    struct Impl<'a> {
+        simd: V4,
+        m: usize,
+        n: usize,
+        dst: &'a mut [f64],
+        lhs: MatRef<'a, f64>,
+        rhs: &'a [u8],
+    }
+
+    impl pulp::NullaryFnOnce for Impl<'_> {
+        type Output = ();
+
+        #[inline(always)]
+        fn call(self) -> Self::Output {
+            let Self {
+                simd,
+                m,
+                n,
+                dst,
+                lhs,
+                rhs,
+            } = self;
+
+            assert!(all(
+                m % 8 == 0,
+                lhs.nrows() == m,
+                lhs.ncols() == n,
+                rhs.len() == m / 8,
+                dst.len() == n,
+            ));
+
+            let (rhs4, rhs1) = pulp::as_arrays::<4, _>(rhs);
+            let pos = simd.splat_f64x8(1.0);
+            let neg = simd.splat_f64x8(-1.0);
+            for j in 0..n {
+                let lhs = pulp::as_arrays::<8, _>(lhs.col(j).try_as_slice().unwrap()).0;
+                let lhs: &[f64x8] = bytemuck::cast_slice(lhs);
+                let mut acc0 = simd.splat_f64x8(0.0);
+                let mut acc1 = simd.splat_f64x8(0.0);
+                let mut acc2 = simd.splat_f64x8(0.0);
+                let mut acc3 = simd.splat_f64x8(0.0);
+
+                let (lhs4, lhs1) = pulp::as_arrays::<4, _>(lhs);
+                for (&[l0, l1, l2, l3], &[r0, r1, r2, r3]) in zip(lhs4, rhs4) {
+                    acc0 = simd.mul_add_f64x8(l0, simd.select_f64x8(b8(r0), pos, neg), acc0);
+                    acc1 = simd.mul_add_f64x8(l1, simd.select_f64x8(b8(r1), pos, neg), acc1);
+                    acc2 = simd.mul_add_f64x8(l2, simd.select_f64x8(b8(r2), pos, neg), acc2);
+                    acc3 = simd.mul_add_f64x8(l3, simd.select_f64x8(b8(r3), pos, neg), acc3);
+                }
+                for (&l0, &r0) in zip(lhs1, rhs1) {
+                    acc0 = simd.mul_add_f64x8(l0, simd.select_f64x8(b8(r0), pos, neg), acc0);
+                }
+                acc0 = simd.add_f64x8(acc0, acc1);
+                acc2 = simd.add_f64x8(acc2, acc3);
+                acc0 = simd.add_f64x8(acc0, acc2);
+                dst[j] += simd.f64s_reduce_sum(acc0);
+            }
+        }
+    }
+
+    simd.vectorize(Impl {
+        simd,
+        m,
+        n,
+        dst,
+        lhs,
+        rhs,
+    })
+}
+
+pub fn matvec_bit(m: usize, n: usize, dst: &mut [f64], lhs: MatRef<'_, f64>, rhs: &[u8]) {
+    struct Impl<'a> {
+        m: usize,
+        n: usize,
+        dst: &'a mut [f64],
+        lhs: MatRef<'a, f64>,
+        rhs: &'a [u8],
+    }
+
+    impl pulp::NullaryFnOnce for Impl<'_> {
+        type Output = ();
+
+        #[inline(always)]
+        fn call(self) -> Self::Output {
+            let Self {
+                m,
+                n,
+                dst,
+                lhs,
+                rhs,
+            } = self;
+
+            assert!(all(
+                n % 8 == 0,
+                lhs.nrows() == m,
+                lhs.ncols() == n,
+                rhs.len() == n / 8,
+                dst.len() == m,
+            ));
+
+            for j in 0..n {
+                let lhs = lhs.col(j).try_as_slice().unwrap();
+                let pos = (rhs[j / 8] >> (j % 8)) & 1 == 1;
+                if pos {
+                    for (dst, &lhs) in zip(&mut *dst, lhs) {
+                        *dst += lhs;
+                    }
+                } else {
+                    for (dst, &lhs) in zip(&mut *dst, lhs) {
+                        *dst -= lhs;
+                    }
+                }
+            }
+        }
+    }
+
+    pulp::Arch::new().dispatch(Impl {
+        m,
+        n,
+        dst,
+        lhs,
+        rhs,
+    })
+}
+
+pub fn tmatvec_bit(m: usize, n: usize, dst: &mut [f64], lhs: MatRef<'_, f64>, rhs: &[u8]) {
+    #[cfg(feature = "nightly")]
+    if let Some(simd) = V4::try_new() {
+        return tmatvec_bit_avx512(simd, m, n, dst, lhs, rhs);
+    }
+    todo!()
+}
+
+pub fn tmatvec(m: usize, n: usize, dst: &mut [f64], lhs: &[u8], rhs: &[f64]) {
+    #[cfg(feature = "nightly")]
+    if V4::try_new().is_some() {
+        return tmatvec_avx512(m, n, dst, lhs, rhs);
+    }
+    tmatvec_avx2(m, n, dst, lhs, rhs);
+}
+
+pub fn matvec(m: usize, n: usize, dst: &mut [f64], lhs: &[u8], rhs: &[f64]) {
+    #[cfg(feature = "nightly")]
+    if V4::try_new().is_some() {
+        return matvec_avx512(m, n, dst, lhs, rhs);
+    }
+    matvec_avx2(m, n, dst, lhs, rhs)
+}
+
+pub fn cache_parameters(m: usize, n: usize, k: usize) -> CacheParams {
+    #[cfg(feature = "nightly")]
+    if V4::try_new().is_some() {
+        return cache_parameters_avx512(m, n, k);
+    }
+    cache_parameters_avx2(m, n, k)
+}
+
+pub fn matmul(
+    cache_params: CacheParams,
+    m: usize,
+    n: usize,
+    k: usize,
+    dst: &mut [f64],
+    lhs: &[u8],
+    diag: &[f64],
+    rhs: &[u8],
+    rhs_layout: Layout,
+    stack: PodStack<'_>,
+) {
+    #[cfg(feature = "nightly")]
+    if V4::try_new().is_some() {
+        return lazy_matmul_avx512(
+            cache_params,
+            m,
+            n,
+            k,
+            dst,
+            lhs,
+            diag,
+            rhs,
+            rhs_layout,
+            stack,
+        );
+    }
+    matmul_avx2(
+        cache_params,
+        m,
+        n,
+        k,
+        dst,
+        lhs,
+        diag,
+        rhs,
+        rhs_layout,
+        stack,
+    );
 }
 
 #[cfg(test)]

@@ -7,6 +7,8 @@ use faer::{
 };
 use std::iter::zip;
 
+use crate::bit_magic;
+
 #[derive(Debug)]
 pub struct SignedCut {
     pub s_sizes: (usize, usize),
@@ -22,11 +24,11 @@ pub struct CutHelper {
 }
 
 pub struct CutHelperV2 {
-    pub(crate) t_signs_old: Col<f64>,
-    pub(crate) s_signs_old: Col<f64>,
-    pub(crate) t_signs: Col<f64>,
+    pub(crate) t_signs_old: Box<[u8]>,
+    pub(crate) s_signs_old: Box<[u8]>,
+    pub(crate) t_signs: Box<[u8]>,
+    pub(crate) s_signs: Box<[u8]>,
     pub(crate) t_image: Col<f64>,
-    pub(crate) s_signs: Col<f64>,
     pub(crate) s_image: Col<f64>,
 }
 
@@ -117,15 +119,26 @@ impl CutHelper {
 }
 
 impl CutHelperV2 {
-    pub fn new(mat: MatRef<'_, f64>) -> Self {
-        let nrows = mat.nrows();
-        let ncols = mat.ncols();
+    pub fn new(two_mat: MatRef<'_, f64>, two_mat_transposed: MatRef<'_, f64>) -> Self {
+        let nrows = two_mat.nrows();
+        let ncols = two_mat.ncols();
 
-        let s_ones = Col::from_fn(nrows, |_| 1.0);
-        let t_ones = Col::from_fn(ncols, |_| 1.0);
+        let s_ones = vec![u8::MAX; nrows / 8].into_boxed_slice();
+        let t_ones = vec![u8::MAX; ncols / 8].into_boxed_slice();
 
-        let s_image = mat.transpose() * &s_ones;
-        let t_image = mat * &t_ones;
+        let mut s_image = Col::<f64>::zeros(ncols);
+        let mut t_image = Col::<f64>::zeros(nrows);
+
+        bit_magic::matvec_bit(
+            ncols,
+            nrows,
+            s_image.as_slice_mut(),
+            two_mat_transposed,
+            &s_ones,
+        );
+        bit_magic::matvec_bit(nrows, ncols, t_image.as_slice_mut(), two_mat, &t_ones);
+        s_image *= faer::scale(0.5);
+        t_image *= faer::scale(0.5);
 
         Self {
             t_signs: t_ones.clone(),
@@ -142,9 +155,9 @@ impl CutHelperV2 {
         &mut self,
         two_remainder: MatRef<'_, f64>,
         two_remainder_transposed: MatRef<'_, f64>,
-        S: MatMut<'_, f64>,
+        S: &mut [u8],
         C: ColMut<'_, f64>,
-        T: MatMut<'_, f64>,
+        T: &mut [u8],
         rng: &mut impl rand::Rng,
         max_iterations: usize,
         parallelism: faer::Parallelism,
@@ -161,38 +174,37 @@ impl CutHelperV2 {
         assert!(all(
             two_remainder.row_stride() == 1,
             two_remainder_transposed.row_stride() == 1,
-            S.ncols() > 0,
-            T.ncols() > 0,
             C.nrows() > 0,
         ));
 
-        let width = S.ncols() - 1;
-        let (S, S_next) = S.split_at_col_mut(width);
-        let (T, T_next) = T.split_at_col_mut(width);
+        let width = C.nrows() - 1;
+        let (S, S_next) = S.split_at_mut(s_signs.len() * width);
+        let (T, T_next) = T.split_at_mut(t_signs.len() * width);
         let (C, C_next) = C.split_at_mut(width);
         let S = S.rb();
         let T = T.rb();
         let C = C.rb();
-        let mut S_next = S_next.col_mut(0);
-        let mut T_next = T_next.col_mut(0);
         let C_next = C_next.get_mut(0);
 
-        t_signs_old.copy_from(&t_signs);
-        t_signs
-            .as_slice_mut()
-            .iter_mut()
-            .for_each(|t_sign| *t_sign = if rng.gen() { 1.0 } else { -1.0 });
+        t_signs_old.copy_from_slice(&t_signs);
+        t_signs.iter_mut().for_each(|t_sign| *t_sign = rng.gen());
         mul_add_with_rank_update(
             t_image.as_mut().try_as_slice_mut().unwrap(),
             two_remainder.rb(),
             S,
             C,
             T,
-            t_signs.as_ref().try_as_slice().unwrap(),
-            t_signs_old.as_ref().try_as_slice().unwrap(),
+            t_signs,
+            t_signs_old,
             stack.rb_mut(),
         );
-        let mut cut = &s_signs.as_ref().transpose() * &*t_image;
+        let mut cut = 0.0;
+        for (&s, &t) in zip(&**s_signs, pulp::as_arrays::<8, _>(t_image.as_slice()).0) {
+            for idx in 0..8 {
+                let sign = (((s >> idx) & 1 == 0) as u64) << 63;
+                cut += f64::from_bits(t[idx].to_bits() ^ sign);
+            }
+        }
 
         for _ in 0..max_iterations {
             let improved_s = improve_with_rank_update(
@@ -234,21 +246,40 @@ impl CutHelperV2 {
         // remainder <- remainder - S * c * T^top
         // s_image <- s_image - T * c * S^top * S
         // t_image <- t_image - S * c * T^top * T
-        *s_image -= faer::scale(cut / two_remainder.nrows() as f64) * &*t_signs;
-        *t_image -= faer::scale(cut / two_remainder.ncols() as f64) * &*s_signs;
 
-        *C_next = -normalized_cut;
-        S_next.copy_from(&s_signs);
-        T_next.copy_from(&t_signs);
+        let k = cut / two_remainder.ncols() as f64;
+        for (s, &t) in zip(
+            pulp::as_arrays_mut::<8, _>(s_image.as_slice_mut()).0,
+            &**t_signs,
+        ) {
+            for idx in 0..8 {
+                let sign = (((t >> idx) & 1 == 0) as u64) << 63;
+                s[idx] -= f64::from_bits(k.to_bits() ^ sign)
+            }
+        }
+        let k = cut / two_remainder.nrows() as f64;
+        for (t, &s) in zip(
+            pulp::as_arrays_mut::<8, _>(t_image.as_slice_mut()).0,
+            &**s_signs,
+        ) {
+            for idx in 0..8 {
+                let sign = (((s >> idx) & 1 == 0) as u64) << 63;
+                t[idx] -= f64::from_bits(k.to_bits() ^ sign)
+            }
+        }
+
+        *C_next = -2.0 * normalized_cut;
+        S_next.copy_from_slice(&s_signs);
+        T_next.copy_from_slice(&t_signs);
 
         cut
     }
 
-    pub fn s_signs(&self) -> &Col<f64> {
+    pub fn s_signs(&self) -> &[u8] {
         &self.s_signs
     }
 
-    pub fn t_signs(&self) -> &Col<f64> {
+    pub fn t_signs(&self) -> &[u8] {
         &self.t_signs
     }
 }
@@ -259,20 +290,20 @@ impl CutHelperV2 {
 fn mul_add_with_rank_update(
     acc: &mut [f64],
     two_mat: MatRef<'_, f64>,
-    S: MatRef<'_, f64>,
+    S: &[u8],
     C: ColRef<'_, f64>,
-    T: MatRef<'_, f64>,
-    x_new: &[f64],
-    x_old: &[f64],
+    T: &[u8],
+    x_new: &[u8],
+    x_old: &[u8],
     stack: PodStack<'_>,
 ) {
     struct Impl<'a> {
         two_mat: MatRef<'a, f64>,
-        S: MatRef<'a, f64>,
+        S: &'a [u8],
         C: ColRef<'a, f64>,
-        T: MatRef<'a, f64>,
-        x_new: &'a [f64],
-        x_old: &'a [f64],
+        T: &'a [u8],
+        x_new: &'a [u8],
+        x_old: &'a [u8],
         acc: &'a mut [f64],
         stack: PodStack<'a>,
     }
@@ -294,23 +325,21 @@ fn mul_add_with_rank_update(
             } = self;
 
             let n = two_mat.ncols();
-            let width = S.ncols();
+            let width = T.len() / x_new.len();
 
             let (diff_indices, stack) = stack.make_raw::<u64>(n);
 
             let mut pos = 0usize;
             for j in 0..n {
-                let s = x_new[j];
-                let s_old = x_old[j];
+                let s_pos = (x_new[j / 8] >> (j % 8)) & 1 == 1;
+                let s_pos_old = (x_old[j / 8] >> (j % 8)) & 1 == 1;
                 let col = two_mat.col(j).try_as_slice().unwrap();
 
-                if s != s_old {
-                    assert!((s - s_old).abs() == 2.0);
-                    diff_indices[pos] = (((s < s_old) as u64) << 63) | j as u64;
+                if s_pos != s_pos_old {
+                    diff_indices[pos] = ((s_pos as u64) << 63) | j as u64;
                     pos += 1;
 
-                    let delta = s - s_old;
-                    if delta == 2.0 {
+                    if s_pos {
                         for (acc, &src) in zip(&mut *acc, col) {
                             *acc += src;
                         }
@@ -327,29 +356,27 @@ fn mul_add_with_rank_update(
             let (y, _) = faer::linalg::temp_mat_uninit::<f64>(width, 1, stack);
             let y = y.col_mut(0).try_as_slice_mut().unwrap();
             for j in 0..width {
-                let col = T.col(j).try_as_slice().unwrap();
-                let mut acc = 0.0;
+                let col = &T[j * n / 8..][..n / 8];
+                let mut acc = 0i64;
                 for &i in diff_indices {
-                    let sign_bit = i & (1 << 63);
+                    let positive = (i >> 63) == 1;
                     let i = i & ((1 << 63) - 1);
                     let i = i as usize;
-                    acc += f64::from_bits(sign_bit ^ col[i].to_bits());
+                    let positive2 = (col[i / 8] >> (i % 8)) & 1 == 1;
+                    if positive == positive2 {
+                        acc += 1;
+                    } else {
+                        acc -= 1;
+                    }
                 }
-                y[j] = acc;
+                y[j] = acc as f64;
             }
             // y = C * y
             for (y, &c) in zip(&mut *y, C.try_as_slice().unwrap()) {
-                *y *= 2.0 * c;
+                *y *= c;
             }
             // acc += S * y
-            matmul(
-                faer::col::from_slice_mut::<f64>(acc).as_2d_mut(),
-                S,
-                faer::col::from_slice::<f64>(y).as_2d(),
-                Some(1.0),
-                1.0,
-                faer::Parallelism::None,
-            );
+            bit_magic::matvec(acc.len(), y.len(), acc, S, y);
         }
     }
 
@@ -438,12 +465,12 @@ pub(crate) fn improve_t(
 
 pub(crate) fn improve_with_rank_update(
     two_mat: MatRef<'_, f64>,
-    S: MatRef<'_, f64>,
+    S: &[u8],
     C: ColRef<'_, f64>,
-    T: MatRef<'_, f64>,
+    T: &[u8],
     s_image: ColRef<'_, f64>,
-    mut t_signs_old: ColMut<'_, f64>,
-    mut t_signs: ColMut<'_, f64>,
+    t_signs_old: &mut [u8],
+    t_signs: &mut [u8],
     mut t_image: ColMut<'_, f64>,
     cut: &mut f64,
     parallelism: faer::Parallelism,
@@ -457,18 +484,22 @@ pub(crate) fn improve_with_rank_update(
         *cut = new_cut
     }
 
-    t_signs_old.copy_from(&t_signs.rb());
-    for i in 0..s_image.nrows() {
-        let t = s_image.read(i);
-        let one = 1.0f64.to_bits();
-        let sign_bit = t.to_bits();
-        let signed_one = one | (sign_bit & (1u64 << 63));
-        t_signs.write(i, f64::from_bits(signed_one));
+    t_signs_old.copy_from_slice(&t_signs.rb());
+    let s_image = s_image.try_as_slice().unwrap();
+    for (i, t) in t_signs.iter_mut().enumerate() {
+        let mut sign = 0u8;
+        sign |= ((s_image[8 * i + 0].to_bits() >> 63) as u8) << 0;
+        sign |= ((s_image[8 * i + 1].to_bits() >> 63) as u8) << 1;
+        sign |= ((s_image[8 * i + 2].to_bits() >> 63) as u8) << 2;
+        sign |= ((s_image[8 * i + 3].to_bits() >> 63) as u8) << 3;
+        sign |= ((s_image[8 * i + 4].to_bits() >> 63) as u8) << 4;
+        sign |= ((s_image[8 * i + 5].to_bits() >> 63) as u8) << 5;
+        sign |= ((s_image[8 * i + 6].to_bits() >> 63) as u8) << 6;
+        sign |= ((s_image[8 * i + 7].to_bits() >> 63) as u8) << 7;
+        *t = !sign;
     }
 
     let t_image = t_image.rb_mut().try_as_slice_mut().unwrap();
-    let t_signs = t_signs.try_as_slice().unwrap();
-    let t_signs_old = t_signs_old.try_as_slice().unwrap();
 
     mul_add_with_rank_update(
         t_image.as_mut(),
@@ -476,8 +507,8 @@ pub(crate) fn improve_with_rank_update(
         S,
         C,
         T,
-        t_signs.rb(),
-        t_signs_old.rb(),
+        t_signs,
+        t_signs_old,
         stack,
     );
 

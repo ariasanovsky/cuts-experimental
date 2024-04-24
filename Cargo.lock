@@ -409,6 +409,7 @@ dependencies = [
  "chrono",
  "clap",
  "cuts",
+ "equator 0.2.0",
  "eyre",
  "faer",
  "half",

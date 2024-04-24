@@ -25,6 +25,7 @@ rayon = "1.9.0"
 candle-core = "0.4.1"
 eyre = "0.6.12"
 linya = "0.3.0"
+equator = "0.2.0"
 
 [[bin]]
 name = "assemble_proxy"
