@@ -1,0 +1,17 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: cuts
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Alex
+    family-names: Neal Riasanovsky
+    orcid: 'https://orcid.org/0000-0002-6127-8749'
+repository-code: 'https://github.com/ariasanovsky/cuts'
+license: Apache-2.0
+commit: 7d7d09fa1b0137182055de81d265ca1fb14601e4
+date-released: '2024-04-30'
